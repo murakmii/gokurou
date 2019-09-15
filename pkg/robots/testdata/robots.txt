@@ -1,0 +1,23 @@
+# This is comment
+::::::::
+Crawl-Delay:90:10
+
+Crawl-Delay: 90
+
+あいうえお
+
+User-Agent: c100m
+# Delay: 999
+Crawl-Delay: 100
+Disallow: /admin/
+Allow: /admin/banner1
+
+User-Agent: googlebot
+Crawl-Delay: 200
+Disallow: /admin/
+Allow: /admin/banner2
+
+User-Agent: *
+Crawl-Delay: 300
+Disallow: /admin/
+Allow: /admin/banner3
