@@ -6,9 +6,9 @@ import (
 
 type Configuration struct {
 	Workers              uint16
-	NewArtifactCollector func() ArtifactCollector
-	NewURLFrontier       func() URLFrontier
-	NewSynchronizer      func() Synchronizer
+	NewArtifactCollector func(conf *Configuration) (ArtifactCollector, error)
+	NewURLFrontier       func(conf *Configuration) (URLFrontier, error)
+	NewSynchronizer      func(conf *Configuration) (Synchronizer, error)
 	Advanced             map[string]interface{}
 }
 
