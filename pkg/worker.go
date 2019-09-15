@@ -79,7 +79,7 @@ func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration
 	errCh := make(chan error, 1)
 	inputCh := make(chan interface{}, 5)
 
-	artifactCollector, err := conf.NewArtifactCollector(conf)
+	artifactCollector, err := conf.NewArtifactCollector(ctx, conf)
 	if err != nil {
 		errCh <- err
 		return inputCh, errCh

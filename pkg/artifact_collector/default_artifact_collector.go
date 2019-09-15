@@ -2,6 +2,7 @@ package artifact_collector
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"time"
 
@@ -18,82 +19,45 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 )
 
-type defaultArtifactCollector struct {
-	storage  distributedStorage
-	prefix   string
-	buffer   *bytes.Buffer
-	bufCount uint8
-	errCount uint8
-}
-
-type distributedStorage interface {
+// 保存先ストレージの詳細を抽象化しておく
+type artifactStorage interface {
 	put(key string, data []byte) error
 }
 
-type s3Storage struct {
-	s3     *s3.S3
-	bucket string
+// デフォルトのArtifactCollector
+// 受け取ったバイト列を改行区切りでストレージに保存する
+type defaultArtifactCollector struct {
+	storage     artifactStorage
+	prefix      string
+	buffer      *bytes.Buffer
+	bufCount    uint8
+	maxBuffered uint8
+	errCount    uint8
 }
 
-func (s *s3Storage) put(key string, data []byte) error {
-	obj := &s3.PutObjectInput{
-		ACL:    aws.String("private"),
-		Body:   bytes.NewReader(data),
-		Key:    aws.String(key),
-		Bucket: aws.String(s.bucket),
+// 新しいNewDefaultArtifactCollectorを生成する
+func NewDefaultArtifactCollector(_ context.Context, conf *pkg.Configuration) (pkg.ArtifactCollector, error) {
+	store, err := newS3StoreFromConfiguration(conf)
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := s.s3.PutObject(obj)
-	return err
+	prefix, err := conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_PREFIX")
+	if err != nil {
+		return nil, err
+	}
+
+	return &defaultArtifactCollector{
+		storage:     store,
+		prefix:      prefix,
+		buffer:      bytes.NewBuffer(nil),
+		bufCount:    0,
+		maxBuffered: 100,
+		errCount:    0,
+	}, nil
 }
 
-func NewDefaultArtifactCollector() pkg.ArtifactCollector {
-	return &defaultArtifactCollector{}
-}
-
-func (c *defaultArtifactCollector) DeclareBufferSize() uint8 {
-	return 10
-}
-
-func (c *defaultArtifactCollector) Init(conf *pkg.Configuration) error {
-	awsID, err := conf.FetchAdvancedAsString("AWS_ACCESS_ID")
-	if err != nil {
-		return err
-	}
-
-	awsSecret, err := conf.FetchAdvancedAsString("AWS_ACCESS_SECRET")
-	if err != nil {
-		return err
-	}
-
-	bucket, err := conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_BUCKET")
-	if err != nil {
-		return err
-	}
-
-	sess, err := session.NewSession()
-	if err != nil {
-		return fmt.Errorf("can't create aws session: %v", err)
-	}
-
-	cred := credentials.NewStaticCredentials(awsID, awsSecret, "")
-	c.storage = &s3Storage{
-		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion("ap-northeast-1")),
-		bucket: bucket,
-	}
-
-	c.prefix, err = conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_PREFIX")
-	if err != nil {
-		return err
-	}
-
-	c.buffer = bytes.NewBuffer(nil)
-	c.bufCount = 0
-	c.errCount = 0
-
-	return nil
-}
-
+// 結果収集。定期的にストレージにアップロードする
 func (c *defaultArtifactCollector) Collect(artifact interface{}) error {
 	b, ok := artifact.([]byte)
 	if !ok {
@@ -104,13 +68,14 @@ func (c *defaultArtifactCollector) Collect(artifact interface{}) error {
 	c.buffer.WriteByte('\n')
 	c.bufCount++
 
-	if c.bufCount < 100 {
+	if c.bufCount < c.maxBuffered {
 		return nil
 	}
 
 	return c.upload()
 }
 
+// 終了時はバッファに残った結果をアップロード
 func (c *defaultArtifactCollector) Finish() error {
 	if c.bufCount == 0 {
 		return nil
@@ -119,6 +84,7 @@ func (c *defaultArtifactCollector) Finish() error {
 	return c.upload()
 }
 
+// アップロード時のキーを生成する
 func (c *defaultArtifactCollector) buildNewKey() (string, error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
@@ -128,6 +94,7 @@ func (c *defaultArtifactCollector) buildNewKey() (string, error) {
 	return fmt.Sprintf("%s/%s/%s.log", c.prefix, time.Now().Format("2006-01-02-15-04"), u.String()), nil
 }
 
+// ストレージへのアップロード処理
 func (c *defaultArtifactCollector) upload() error {
 	key, err := c.buildNewKey()
 	if err != nil {
@@ -148,4 +115,58 @@ func (c *defaultArtifactCollector) upload() error {
 	c.errCount = 0
 
 	return nil
+}
+
+// artifactStoreを実装したS3を対象にしたストレージ
+type s3ArtifactStorage struct {
+	s3     *s3.S3
+	bucket string
+}
+
+// 新しくs3ArtifactStoreを生成する
+func newS3StoreFromConfiguration(conf *pkg.Configuration) (*s3ArtifactStorage, error) {
+	awsRegion, err := conf.FetchAdvancedAsString("AWS_REGION")
+	if err != nil {
+		return nil, err
+	}
+
+	awsID, err := conf.FetchAdvancedAsString("AWS_ACCESS_ID")
+	if err != nil {
+		return nil, err
+	}
+
+	awsSecret, err := conf.FetchAdvancedAsString("AWS_ACCESS_SECRET")
+	if err != nil {
+		return nil, err
+	}
+
+	sess, err := session.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("can't create aws session: %v", err)
+	}
+
+	cred := credentials.NewStaticCredentials(awsID, awsSecret, "")
+
+	bucket, err := conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_BUCKET")
+	if err != nil {
+		return nil, err
+	}
+
+	return &s3ArtifactStorage{
+		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(awsRegion)),
+		bucket: bucket,
+	}, nil
+}
+
+// 結果をS3のオブジェクトとして保存する
+func (s *s3ArtifactStorage) put(key string, data []byte) error {
+	obj := &s3.PutObjectInput{
+		ACL:    aws.String("private"),
+		Body:   bytes.NewReader(data),
+		Key:    aws.String(key),
+		Bucket: aws.String(s.bucket),
+	}
+
+	_, err := s.s3.PutObject(obj)
+	return err
 }

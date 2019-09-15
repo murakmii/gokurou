@@ -1,12 +1,13 @@
 package pkg
 
 import (
+	"context"
 	"fmt"
 )
 
 type Configuration struct {
 	Workers              uint16
-	NewArtifactCollector func(conf *Configuration) (ArtifactCollector, error)
+	NewArtifactCollector func(ctx context.Context, conf *Configuration) (ArtifactCollector, error)
 	NewURLFrontier       func(conf *Configuration) (URLFrontier, error)
 	NewSynchronizer      func(conf *Configuration) (Synchronizer, error)
 	Advanced             map[string]interface{}
