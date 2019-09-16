@@ -1,0 +1,8 @@
+version: "2"
+
+services:
+  redis:
+    image: redis:5.0
+    container_name: "gokurou-dev-redis"
+    ports:
+      - "11111:6379"
