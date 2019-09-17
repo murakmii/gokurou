@@ -2,6 +2,7 @@ package html
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net/url"
 	"path"
 	"strings"
@@ -72,6 +73,17 @@ func SanitizedURLFromString(s string) (*SanitizedURL, error) {
 // サニタイズ済みURLの文字列表現を返す
 func (sanitized *SanitizedURL) String() string {
 	return sanitized.url.String()
+}
+
+// URLのハッシュ値を返す
+func (sanitized *SanitizedURL) HashNumber() (uint32, error) {
+	hash := fnv.New32a()
+	_, err := hash.Write([]byte(sanitized.url.Host))
+	if err != nil {
+		return 0, err
+	}
+
+	return hash.Sum32(), nil
 }
 
 // このサニタイズ済みURLを元に、相対パスを与えて新しいサニタイズ済みURLを生成する

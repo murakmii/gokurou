@@ -32,7 +32,7 @@ func mockNameResolver(_ string) ([]net.IP, error) {
 }
 
 func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
-	t.Run("まだWorkerが登録されていない場合", func(t *testing.T) {
+	t.Run("まだWorkerが登録されていない場合、1を返す", func(t *testing.T) {
 		syncer := buildDefaultSynchronizer()
 
 		gwn, err := syncer.GetNextGlobalWorkerNumber()
@@ -45,7 +45,7 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 		}
 	})
 
-	t.Run("Workerがいくつか登録されている場合", func(t *testing.T) {
+	t.Run("Workerがいくつか登録されている場合、次の番号を返す", func(t *testing.T) {
 		syncer := buildDefaultSynchronizer()
 		_, err := syncer.conn.Do("SET", "gokurou_workers", 3)
 		if err != nil {
@@ -64,7 +64,7 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 }
 
 func TestDefaultSynchronizer_LockByIPAddrOf(t *testing.T) {
-	t.Run("ロックを獲得できる場合", func(t *testing.T) {
+	t.Run("ロックを獲得できる場合、trueを返す", func(t *testing.T) {
 		syncer := buildDefaultSynchronizer()
 
 		locked, err := syncer.LockByIPAddrOf("example.com")
@@ -87,7 +87,7 @@ func TestDefaultSynchronizer_LockByIPAddrOf(t *testing.T) {
 		}
 	})
 
-	t.Run("ロックを獲得できない場合", func(t *testing.T) {
+	t.Run("ロックを獲得できない場合、falseを返す", func(t *testing.T) {
 		syncer := buildDefaultSynchronizer()
 		_, _ = syncer.conn.Do("SETEX", "l-192.168.0.1", 10, 1)
 

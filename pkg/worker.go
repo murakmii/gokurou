@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/murakmii/gokurou/pkg/html"
@@ -17,6 +18,15 @@ const (
 
 func NewWorker() *Worker {
 	return &Worker{}
+}
+
+func GWNFromContext(ctx context.Context) uint16 {
+	value, ok := ctx.Value(ctxKeyGlobalWorkerNumber).(uint16)
+	if !ok {
+		panic(fmt.Errorf("can't fetch global worker number from context"))
+	}
+
+	return value
 }
 
 func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configuration, localWorkerNum uint16) {
@@ -109,7 +119,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration) (<-c
 	pushCh := make(chan *html.SanitizedURL, 10)
 	errCh := make(chan error, 1)
 
-	urlFrontier, err := conf.NewURLFrontier(conf)
+	urlFrontier, err := conf.NewURLFrontier(ctx, conf)
 	if err != nil {
 		errCh <- err
 		return popCh, pushCh, errCh

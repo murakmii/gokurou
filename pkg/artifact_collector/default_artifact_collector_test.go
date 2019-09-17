@@ -32,7 +32,7 @@ func buildDefaultArtifactCollector() (*defaultArtifactCollector, *basicMockArtif
 }
 
 func TestDefaultArtifactCollector_Collect(t *testing.T) {
-	t.Run("収集された結果がバッファ上限内の場合", func(t *testing.T) {
+	t.Run("収集された結果がバッファ上限内の場合、バッファを続ける", func(t *testing.T) {
 		collector, storage := buildDefaultArtifactCollector()
 		_ = collector.Collect([]byte("abc"))
 
@@ -49,7 +49,7 @@ func TestDefaultArtifactCollector_Collect(t *testing.T) {
 		}
 	})
 
-	t.Run("収集された結果がバッファ上限に達した場合", func(t *testing.T) {
+	t.Run("収集された結果がバッファ上限に達した場合、結果を保存する", func(t *testing.T) {
 		collector, storage := buildDefaultArtifactCollector()
 		_ = collector.Collect([]byte("abc"))
 		_ = collector.Collect([]byte("def"))

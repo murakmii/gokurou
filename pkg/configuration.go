@@ -7,8 +7,9 @@ import (
 
 type Configuration struct {
 	Workers              uint16
+	Machines             uint8
 	NewArtifactCollector func(ctx context.Context, conf *Configuration) (ArtifactCollector, error)
-	NewURLFrontier       func(conf *Configuration) (URLFrontier, error)
+	NewURLFrontier       func(ctx context.Context, conf *Configuration) (URLFrontier, error)
 	NewSynchronizer      func(conf *Configuration) (Synchronizer, error)
 	Advanced             map[string]interface{}
 }
@@ -18,6 +19,10 @@ func NewConfiguration(workers uint16) *Configuration {
 		Workers:  workers,
 		Advanced: make(map[string]interface{}),
 	}
+}
+
+func (c *Configuration) TotalWorkers() uint16 {
+	return c.Workers * uint16(c.Machines)
 }
 
 func (c *Configuration) FetchAdvancedAsString(key string) (string, error) {
