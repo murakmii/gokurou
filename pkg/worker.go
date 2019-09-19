@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/murakmii/gokurou/pkg/html"
 	"github.com/murakmii/gokurou/pkg/worker"
@@ -47,23 +48,19 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		ctx, cancel := w.buildWorkerContext(ctx, globalWorkerNum, localWorkerNum)
 
-		artifactInputCh, artifactErrCh := w.startArtifactCollector(ctx, conf)
-		popCh, pushCh, frontierErrCh := w.startURLFrontier(ctx, conf)
+		resultCh := make(chan error, 2)
 		results := make([]error, 0, 2)
 
-		_ = worker.NewDataPipeline(artifactInputCh, popCh, pushCh)
+		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, syncer, resultCh)
+		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
+
+		_ = worker.NewDataPipeline(acCh, popCh, pushCh)
 
 		// TODO: Crawler
 
 		for {
 			select {
-			case err := <-artifactErrCh:
-				results = append(results, err)
-				if err != nil {
-					cancel()
-				}
-
-			case err := <-frontierErrCh:
+			case err := <-resultCh:
 				results = append(results, err)
 				if err != nil {
 					cancel()
@@ -75,7 +72,21 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
-		// TODO: error logging
+		if frontier != nil {
+			if err = frontier.Finish(); err != nil {
+				// TODO: error logging
+			}
+		}
+
+		if artifactCollector != nil {
+			if err = artifactCollector.Finish(); err != nil {
+				// TODO: error logging
+			}
+		}
+
+		if err = syncer.Finish(); err != nil {
+			// TODO: error logging
+		}
 	}()
 }
 
@@ -85,44 +96,42 @@ func (w *Worker) buildWorkerContext(ctx context.Context, globalWorkerNum, localW
 	return context.WithCancel(ctx)
 }
 
-func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration) (chan<- interface{}, <-chan error) {
-	errCh := make(chan error, 1)
+func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactCollector, chan<- interface{}) {
 	inputCh := make(chan interface{}, 5)
 
-	artifactCollector, err := conf.NewArtifactCollector(ctx, conf)
+	ac, err := conf.NewArtifactCollector(ctx, conf)
 	if err != nil {
-		errCh <- err
-		return inputCh, errCh
+		resultCh <- err
+		return nil, inputCh
 	}
 
 	go func() {
 		for {
 			select {
 			case artifact := <-inputCh:
-				if err := artifactCollector.Collect(artifact); err != nil {
-					errCh <- err
+				if err := ac.Collect(artifact); err != nil {
+					resultCh <- err
 					return
 				}
 
 			case <-ctx.Done():
-				errCh <- artifactCollector.Finish()
+				resultCh <- nil
 				return
 			}
 		}
 	}()
 
-	return inputCh, errCh
+	return ac, inputCh
 }
 
-func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration) (<-chan *html.SanitizedURL, chan<- *html.SanitizedURL, <-chan error) {
+func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, syncer Synchronizer, resultCh chan<- error) (URLFrontier, <-chan *html.SanitizedURL, chan<- *html.SanitizedURL) {
 	popCh := make(chan *html.SanitizedURL, 5)
 	pushCh := make(chan *html.SanitizedURL, 10)
-	errCh := make(chan error, 1)
 
 	urlFrontier, err := conf.NewURLFrontier(ctx, conf)
 	if err != nil {
-		errCh <- err
-		return popCh, pushCh, errCh
+		resultCh <- err
+		return nil, popCh, pushCh
 	}
 
 	go func() {
@@ -140,12 +149,33 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration) (<-c
 					return
 				}
 
-				select {
-				case popCh <- url:
-					// nop
-				case <-ctx.Done():
-					childErrCh <- nil
-					return
+				if url == nil {
+					select {
+					case <-time.After(1 * time.Second):
+						// nop
+					case <-ctx.Done():
+						childErrCh <- nil
+						return
+					}
+				} else {
+					locked, err := syncer.LockByIPAddrOf(url.Host())
+					if err != nil {
+						childErrCh <- err
+						return
+					}
+
+					if locked {
+						// TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
+						continue
+					}
+
+					select {
+					case popCh <- url:
+						// nop
+					case <-ctx.Done():
+						childErrCh <- nil
+						return
+					}
 				}
 			}
 		}()
@@ -178,23 +208,15 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration) (<-c
 			}
 		}
 
-		if err := urlFrontier.Finish(); err != nil {
-			errCh <- err
-			return
+		for i := 0; i < len(results); i++ {
+			if results[i] != nil {
+				resultCh <- results[i]
+				return
+			}
 		}
 
-		if results[0] != nil {
-			errCh <- results[0]
-			return
-		}
-
-		if results[1] != nil {
-			errCh <- results[1]
-			return
-		}
-
-		errCh <- nil
+		resultCh <- nil
 	}()
 
-	return popCh, pushCh, errCh
+	return urlFrontier, popCh, pushCh
 }

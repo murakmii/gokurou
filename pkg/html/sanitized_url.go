@@ -70,6 +70,11 @@ func SanitizedURLFromString(s string) (*SanitizedURL, error) {
 	return SanitizedURLFromURL(u)
 }
 
+// URLのホスト部を返す
+func (sanitized *SanitizedURL) Host() string {
+	return sanitized.url.Host
+}
+
 // サニタイズ済みURLの文字列表現を返す
 func (sanitized *SanitizedURL) String() string {
 	return sanitized.url.String()
