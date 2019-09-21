@@ -164,7 +164,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 						return
 					}
 
-					if locked {
+					if !locked {
 						// TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
 						continue
 					}

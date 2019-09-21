@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+
 	"github.com/murakmii/gokurou/pkg"
 
 	"github.com/google/uuid"
-
-	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/aws/aws-sdk-go/service/s3"
 
@@ -35,6 +35,14 @@ type defaultArtifactCollector struct {
 	errCount    uint8
 }
 
+const (
+	awsRegionConfName = "AWS_REGION"
+	awsIDConfName     = "AWS_ACCESS_ID"
+	awsSecretConfName = "AWS_ACCESS_SECRET"
+	keyPrefixConfName = "ARTIFACT_COLLECTOR_KEY_PREFIX"
+	bucketConfName    = "ARTIFACT_COLLECTOR_BUCKET"
+)
+
 // 新しいNewDefaultArtifactCollectorを生成する
 func NewDefaultArtifactCollector(_ context.Context, conf *pkg.Configuration) (pkg.ArtifactCollector, error) {
 	store, err := newS3StoreFromConfiguration(conf)
@@ -42,14 +50,9 @@ func NewDefaultArtifactCollector(_ context.Context, conf *pkg.Configuration) (pk
 		return nil, err
 	}
 
-	prefix, err := conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_PREFIX")
-	if err != nil {
-		return nil, err
-	}
-
 	return &defaultArtifactCollector{
 		storage:     store,
-		prefix:      prefix,
+		prefix:      conf.MustFetchAdvancedAsString(keyPrefixConfName),
 		buffer:      bytes.NewBuffer(nil),
 		bufCount:    0,
 		maxBuffered: 100,
@@ -124,37 +127,21 @@ type s3ArtifactStorage struct {
 }
 
 // 新しくs3ArtifactStoreを生成する
-func newS3StoreFromConfiguration(conf *pkg.Configuration) (*s3ArtifactStorage, error) {
-	awsRegion, err := conf.FetchAdvancedAsString("AWS_REGION")
-	if err != nil {
-		return nil, err
-	}
-
-	awsID, err := conf.FetchAdvancedAsString("AWS_ACCESS_ID")
-	if err != nil {
-		return nil, err
-	}
-
-	awsSecret, err := conf.FetchAdvancedAsString("AWS_ACCESS_SECRET")
-	if err != nil {
-		return nil, err
-	}
-
+func newS3StoreFromConfiguration(conf *pkg.Configuration) (artifactStorage, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("can't create aws session: %v", err)
 	}
 
-	cred := credentials.NewStaticCredentials(awsID, awsSecret, "")
-
-	bucket, err := conf.FetchAdvancedAsString("DEFAULT_ARTIFACT_COLLECTOR_BUCKET")
-	if err != nil {
-		return nil, err
-	}
+	cred := credentials.NewStaticCredentials(
+		conf.MustFetchAdvancedAsString(awsIDConfName),
+		conf.MustFetchAdvancedAsString(awsSecretConfName),
+		"",
+	)
 
 	return &s3ArtifactStorage{
-		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(awsRegion)),
-		bucket: bucket,
+		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustFetchAdvancedAsString(awsRegionConfName))),
+		bucket: conf.MustFetchAdvancedAsString(bucketConfName),
 	}, nil
 }
 

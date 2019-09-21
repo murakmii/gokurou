@@ -28,17 +28,26 @@ func (c *Configuration) TotalWorkers() uint16 {
 func (c *Configuration) FetchAdvancedAsString(key string) (string, error) {
 	value, ok := c.Advanced[key]
 	if !ok {
-		return "", fmt.Errorf("key '%s' not found", key)
+		return "", fmt.Errorf("configuration key '%s' not found", key)
 	}
 
 	asStr, ok := value.(string)
 	if !ok {
-		return "", fmt.Errorf("key '%s' has not value as string", key)
+		return "", fmt.Errorf("configuration key '%s' has not value as string", key)
 	}
 
 	if len(asStr) == 0 {
-		return "", fmt.Errorf("key '%s' not found", key)
+		return "", fmt.Errorf("configuration key '%s' not found", key)
 	}
 
 	return asStr, nil
+}
+
+func (c *Configuration) MustFetchAdvancedAsString(key string) string {
+	str, err := c.FetchAdvancedAsString(key)
+	if err != nil {
+		panic(err)
+	}
+
+	return str
 }

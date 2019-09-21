@@ -7,18 +7,17 @@ import (
 	"github.com/murakmii/gokurou/pkg"
 )
 
+const (
+	redisURLConfName = "REDIS_URL"
+)
+
 type defaultSynchronizer struct {
 	conn         redis.Conn
 	nameResolver func(host string) ([]net.IP, error)
 }
 
 func NewDefaultSynchronizer(conf *pkg.Configuration) (pkg.Synchronizer, error) {
-	redisURL, err := conf.FetchAdvancedAsString("REDIS_URL")
-	if err != nil {
-		return nil, err
-	}
-
-	conn, err := redis.DialURL(redisURL)
+	conn, err := redis.DialURL(conf.MustFetchAdvancedAsString(redisURLConfName))
 	if err != nil {
 		return nil, err
 	}
