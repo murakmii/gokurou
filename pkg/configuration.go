@@ -10,6 +10,7 @@ type Configuration struct {
 	Machines             uint8
 	NewArtifactCollector func(ctx context.Context, conf *Configuration) (ArtifactCollector, error)
 	NewURLFrontier       func(ctx context.Context, conf *Configuration) (URLFrontier, error)
+	NewCrawler           func(ctx context.Context, conf *Configuration) (Crawler, error)
 	NewSynchronizer      func(conf *Configuration) (Synchronizer, error)
 	Advanced             map[string]interface{}
 }

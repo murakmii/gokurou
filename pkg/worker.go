@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/murakmii/gokurou/pkg/html"
-	"github.com/murakmii/gokurou/pkg/worker"
 )
 
 type Worker struct{}
@@ -48,15 +47,12 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		ctx, cancel := w.buildWorkerContext(ctx, globalWorkerNum, localWorkerNum)
 
-		resultCh := make(chan error, 2)
-		results := make([]error, 0, 2)
+		resultCh := make(chan error, 3)
+		results := make([]error, 0, 3)
 
 		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, syncer, resultCh)
 		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
-
-		_ = worker.NewDataPipeline(acCh, popCh, pushCh)
-
-		// TODO: Crawler
+		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
 
 		for {
 			select {
@@ -67,8 +63,16 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 				}
 			}
 
-			if len(results) == 2 {
+			if len(results) == 3 {
 				break
+			}
+		}
+
+		// TODO: Finish() errorを実装している型をまとめて処理すれば良くないか
+
+		if crawler != nil {
+			if err = crawler.Finish(); err != nil {
+				// TODO: error logging
 			}
 		}
 
@@ -219,4 +223,30 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 	}()
 
 	return urlFrontier, popCh, pushCh
+}
+
+func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *html.SanitizedURL, out *OutputPipeline, resultCh chan<- error) Crawler {
+	crawler, err := conf.NewCrawler(ctx, conf)
+	if err != nil {
+		resultCh <- err
+		return nil
+	}
+
+	go func() {
+		for {
+			select {
+			case url := <-popCh:
+				if err := crawler.Crawl(ctx, url, out); err != nil {
+					resultCh <- err
+					return
+				}
+
+			case <-ctx.Done():
+				resultCh <- nil
+				return
+			}
+		}
+	}()
+
+	return crawler
 }
