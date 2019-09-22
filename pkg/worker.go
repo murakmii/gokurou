@@ -142,7 +142,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 		// Pop loop
 		go func() {
 			for {
-				url, err := urlFrontier.Pop()
+				url, err := urlFrontier.Pop(ctx)
 				if err != nil {
 					childErrCh <- err
 					cancel()
@@ -185,7 +185,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 			for {
 				select {
 				case url := <-pushCh:
-					if err := urlFrontier.Push(url); err != nil {
+					if err := urlFrontier.Push(ctx, url); err != nil {
 						childErrCh <- err
 						cancel()
 						return

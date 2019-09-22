@@ -1,103 +1,183 @@
 package url_frontier
 
 import (
+	"context"
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/murakmii/gokurou/pkg/html"
 
-	"github.com/gomodule/redigo/redis"
+	"github.com/murakmii/gokurou/pkg"
 )
 
-func buildPublisher() *publisher {
-	conn, err := redis.DialURL("redis://localhost:11111/2")
-	if err != nil {
-		panic(err)
-	}
-
-	_, err = conn.Do("FLUSHALL")
-	if err != nil {
-		panic(err)
-	}
-
-	return &publisher{
-		conn:         conn,
-		totalWorkers: 10,
-		published:    make(map[uint16]int),
-		buffer:       make(map[uint16][]string),
-		noBufUntil:   0,
-		maxBuffer:    0,
-	}
+func buildContext() context.Context {
+	return context.WithValue(context.Background(), "GLOBAL_WORKER_NUMBER", uint16(1))
 }
 
-func TestPublisher_publish(t *testing.T) {
-	url, err := html.SanitizedURLFromString("http://example.com")
+func buildURLFrontier(ctx context.Context) *defaultURLFrontier {
+	conf := pkg.NewConfiguration(10)
+	conf.Workers = 1
+	conf.Machines = 1
+	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:test1234@/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
+	conf.Advanced["URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"] = func(_ uint16) string { return ":memory:" }
+
+	f, err := NewDefaultURLFrontier(ctx, conf)
 	if err != nil {
 		panic(err)
 	}
 
-	hash, err := url.HashNumber()
+	frontier := f.(*defaultURLFrontier)
+	if _, err = frontier.sharedDB.Exec("TRUNCATE urls"); err != nil {
+		panic(err)
+	}
+
+	return frontier
+}
+
+func buildRandomHostURL() *html.SanitizedURL {
+	u, err := uuid.NewRandom()
 	if err != nil {
 		panic(err)
 	}
 
-	shade := uint16(hash%10) + 1
-	stream := fmt.Sprintf("url_stream_%d", shade)
+	url, err := html.SanitizedURLFromString(fmt.Sprintf("http://example-%s.com", u.String()))
+	if err != nil {
+		panic(err)
+	}
 
-	fmt.Println(stream)
+	return url
+}
 
-	t.Run("publish回数が規定回数に満たない場合、即座にpublishする", func(t *testing.T) {
-		publisher := buildPublisher()
-		publisher.noBufUntil = 3
-		publisher.maxBuffer = 3
+func TestDefaultURLFrontier_Push(t *testing.T) {
+	ctx := buildContext()
+	frontier := buildURLFrontier(ctx)
 
-		err = publisher.publish(url)
+	defer frontier.Finish()
 
-		if err != nil {
-			t.Errorf("publish(%s) = %v", url.String(), err)
+	t.Run("十分にPushしたことがない場合、即座にPushする", func(t *testing.T) {
+		url := buildRandomHostURL()
+		if err := frontier.Push(ctx, url); err != nil {
+			t.Errorf("Push(%s) = %v", url, err)
 		}
 
-		publishedLen, err := redis.Uint64(publisher.conn.Do("LLEN", stream))
+		var pushed string
+		err := frontier.sharedDB.QueryRow("SELECT tab_joined_url FROM urls WHERE id = (SELECT MAX(id) FROM urls)").Scan(&pushed)
 		if err != nil {
 			panic(err)
 		}
 
-		if publishedLen != 1 {
-			t.Errorf("publish(%s) does NOT publish url", url)
-		}
-
-		publishedURL, err := redis.String(publisher.conn.Do("LPOP", stream))
-		if publishedURL != url.String() {
-			t.Errorf("publish(%s) published %s, want = %s", url.String(), publishedURL, url.String())
+		if pushed != url.String() {
+			t.Errorf("Push(%s) does NOT push valid url(%s)", url, pushed)
 		}
 	})
 
-	t.Run("publish回数が規定回数に達している場合、バッファしてからpublishする", func(t *testing.T) {
-		publisher := buildPublisher()
-		publisher.noBufUntil = 3
-		publisher.maxBuffer = 3
-		publisher.published[shade] = 3
+	t.Run("十分にPushしている場合、バッファしてからPushする", func(t *testing.T) {
+		frontier.pushedCount[1] = 99
+		want := make([]string, 50)
+		for i := 1; i <= 50; i++ {
+			url := buildRandomHostURL()
+			want[i-1] = url.String()
 
-		for i := 0; i < 3; i++ {
-			if err := publisher.publish(url); err != nil {
-				t.Errorf("publish(%s) = %v", url.String(), err)
+			if err := frontier.Push(ctx, url); err != nil {
+				t.Errorf("Push(%s) = %v", url, err)
 				break
 			}
 		}
 
-		publishedLen, err := redis.Uint64(publisher.conn.Do("LLEN", stream))
+		var pushed string
+		err := frontier.sharedDB.QueryRow("SELECT tab_joined_url FROM urls WHERE id = (SELECT MAX(id) FROM urls)").Scan(&pushed)
 		if err != nil {
 			panic(err)
 		}
 
-		if publishedLen != 1 {
-			t.Errorf("publish(%s) does NOT publish url", url)
-		}
-
-		publishedURL, err := redis.String(publisher.conn.Do("LPOP", stream))
-		want := fmt.Sprintf("%s\t%s\t%s", url.String(), url.String(), url.String())
-		if publishedURL != want {
-			t.Errorf("publish(%s)*3 published %s, want = %s", url.String(), publishedURL, want)
+		if pushed != strings.Join(want, "\t") {
+			t.Errorf("Push([URL]) does NOT push tab joined url(%s)", pushed)
 		}
 	})
+}
+
+func TestDefaultURLFrontier_Pop(t *testing.T) {
+	ctx := buildContext()
+	frontier := buildURLFrontier(ctx)
+
+	defer frontier.Finish()
+
+	t.Run("PopするURLがない場合、nilを返す", func(t *testing.T) {
+		url, err := frontier.Pop(ctx)
+		if err != nil {
+			t.Errorf("Pop() = %v", err)
+		}
+
+		if url != nil {
+			t.Errorf("Pop() = %v, want = nil", url)
+		}
+	})
+
+	t.Run("PopするURLがある場合、それを返す", func(t *testing.T) {
+		url := buildRandomHostURL()
+		if err := frontier.Push(ctx, url); err != nil {
+			panic(err)
+		}
+
+		poppedURL, err := frontier.Pop(ctx)
+		if err != nil {
+			t.Errorf("Pop() = %v", err)
+		}
+
+		if poppedURL == nil || poppedURL.String() != url.String() {
+			t.Errorf("Pop() = %s, want = %s", poppedURL, url)
+		}
+	})
+
+	t.Run("PopしたURLがクロール済みのものだった場合、次のURLを返す", func(t *testing.T) {
+		urls := []*html.SanitizedURL{buildRandomHostURL(), buildRandomHostURL()}
+		for _, url := range urls {
+			if err := frontier.Push(ctx, url); err != nil {
+				panic(err)
+			}
+		}
+
+		if err := frontier.MarkAsCrawled(ctx, urls[0]); err != nil {
+			panic(err)
+		}
+
+		poppedURL, err := frontier.Pop(ctx)
+		if err != nil {
+			t.Errorf("Pop() = %v", err)
+		}
+
+		if poppedURL == nil || poppedURL.String() != urls[1].String() {
+			t.Errorf("Pop() = %s, want = %s", poppedURL, urls[1].String())
+		}
+	})
+}
+
+func TestDefaultURLFrontier_MarkAsCrawled(t *testing.T) {
+	ctx := buildContext()
+	frontier := buildURLFrontier(ctx)
+
+	defer frontier.Finish()
+
+	url := buildRandomHostURL()
+	if err := frontier.MarkAsCrawled(ctx, url); err != nil {
+		t.Errorf("MarkAsCrawled(%s) = %v", url, err)
+	}
+
+	var marked int64
+	err := frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", url.Host()).Scan(&marked)
+	if err != nil {
+		t.Errorf("MarkAsCrawled(%s) does NOT mark as crawled", url)
+	}
+}
+
+func TestDefaultURLFrontier_Finish(t *testing.T) {
+	ctx := buildContext()
+	frontier := buildURLFrontier(ctx)
+
+	if err := frontier.Finish(); err != nil {
+		t.Errorf("Finish() = %v", err)
+	}
 }
