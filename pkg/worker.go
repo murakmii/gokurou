@@ -49,10 +49,16 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
+		resOwners := make([]ResourceOwner, 4)
 
 		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, syncer, resultCh)
 		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
 		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
+
+		resOwners[0] = crawler
+		resOwners[1] = frontier
+		resOwners[2] = artifactCollector
+		resOwners[3] = syncer
 
 		for {
 			select {
@@ -68,28 +74,14 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
-		// TODO: Finish() errorを実装している型をまとめて処理すれば良くないか
+		for _, resOwner := range resOwners {
+			if resOwner == nil {
+				continue
+			}
 
-		if crawler != nil {
-			if err = crawler.Finish(); err != nil {
+			if err := resOwner.Finish(); err != nil {
 				// TODO: error logging
 			}
-		}
-
-		if frontier != nil {
-			if err = frontier.Finish(); err != nil {
-				// TODO: error logging
-			}
-		}
-
-		if artifactCollector != nil {
-			if err = artifactCollector.Finish(); err != nil {
-				// TODO: error logging
-			}
-		}
-
-		if err = syncer.Finish(); err != nil {
-			// TODO: error logging
 		}
 	}()
 }

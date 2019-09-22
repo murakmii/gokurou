@@ -7,8 +7,9 @@ import (
 )
 
 type URLFrontier interface {
+	ResourceOwner
+
 	Push(ctx context.Context, url *html.SanitizedURL) error
 	Pop(ctx context.Context) (*html.SanitizedURL, error)
 	MarkAsCrawled(ctx context.Context, url *html.SanitizedURL) error
-	Finish() error
 }
