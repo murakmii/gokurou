@@ -14,7 +14,7 @@ import (
 )
 
 func buildContext() context.Context {
-	return context.WithValue(context.Background(), "GLOBAL_WORKER_NUMBER", uint16(1))
+	return pkg.ContextWithGWN(context.Background(), uint16(1))
 }
 
 func buildURLFrontier(ctx context.Context) *defaultURLFrontier {

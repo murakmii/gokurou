@@ -2,7 +2,6 @@ package pkg
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -11,21 +10,8 @@ import (
 
 type Worker struct{}
 
-const (
-	ctxKeyGlobalWorkerNumber = "GLOBAL_WORKER_NUMBER"
-)
-
 func NewWorker() *Worker {
 	return &Worker{}
-}
-
-func GWNFromContext(ctx context.Context) uint16 {
-	value, ok := ctx.Value(ctxKeyGlobalWorkerNumber).(uint16)
-	if !ok {
-		panic(fmt.Errorf("can't fetch global worker number from context"))
-	}
-
-	return value
 }
 
 func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configuration) {
@@ -81,8 +67,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 }
 
 func (w *Worker) buildWorkerContext(ctx context.Context, gwn uint16) (context.Context, context.CancelFunc) {
-	ctx = context.WithValue(ctx, ctxKeyGlobalWorkerNumber, gwn)
-	return context.WithCancel(ctx)
+	return context.WithCancel(ContextWithGWN(context.Background(), gwn))
 }
 
 func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactCollector, chan<- interface{}) {
