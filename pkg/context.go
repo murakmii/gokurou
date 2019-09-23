@@ -57,7 +57,7 @@ func ContextWithGWN(ctx context.Context, gwn uint16) context.Context {
 }
 
 func LoggerFromContext(ctx context.Context) *logrus.Entry {
-	logger, ok := ctx.Value(gwnContextKey).(*logrus.Entry)
+	logger, ok := ctx.Value(loggerContextKey).(*logrus.Entry)
 	if !ok {
 		panic(xerrors.New("can't fetch logger from context"))
 	}

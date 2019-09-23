@@ -126,7 +126,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 
 				if url == nil {
 					select {
-					case <-time.After(1 * time.Second):
+					case <-time.After(100 * time.Millisecond):
 						// nop
 					case <-ctx.Done():
 						childErrCh <- nil
@@ -140,8 +140,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 					}
 
 					if !locked {
-						// TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
-						continue
+						continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
 					}
 
 					select {
