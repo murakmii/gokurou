@@ -49,16 +49,10 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
-		resOwners := make([]ResourceOwner, 4)
 
 		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, syncer, resultCh)
 		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
 		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
-
-		resOwners[0] = crawler
-		resOwners[1] = frontier
-		resOwners[2] = artifactCollector
-		resOwners[3] = syncer
 
 		for {
 			select {
@@ -74,6 +68,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
+		resOwners := []ResourceOwner{crawler, frontier, artifactCollector, syncer}
 		for _, resOwner := range resOwners {
 			if resOwner == nil {
 				continue
