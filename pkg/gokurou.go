@@ -15,7 +15,7 @@ func Start(conf *Configuration) {
 
 	for i := uint16(0); i < conf.Workers; i++ {
 		wg.Add(1)
-		NewWorker().Start(ctx, wg, conf, i+1)
+		NewWorker().Start(ctx, wg, conf)
 	}
 
 	wg.Wait()

@@ -13,7 +13,6 @@ type Worker struct{}
 
 const (
 	ctxKeyGlobalWorkerNumber = "GLOBAL_WORKER_NUMBER"
-	ctxKeyLocalWorkerNumber  = "LOCAL_WORKER_NUMBER"
 )
 
 func NewWorker() *Worker {
@@ -29,7 +28,7 @@ func GWNFromContext(ctx context.Context) uint16 {
 	return value
 }
 
-func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configuration, localWorkerNum uint16) {
+func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configuration) {
 	go func() {
 		defer wg.Done()
 
@@ -39,13 +38,13 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			return
 		}
 
-		globalWorkerNum, err := syncer.GetNextGlobalWorkerNumber()
+		gwn, err := syncer.AllocNextGWN()
 		if err != nil {
 			// TODO: error logging
 			return
 		}
 
-		ctx, cancel := w.buildWorkerContext(ctx, globalWorkerNum, localWorkerNum)
+		ctx, cancel := w.buildWorkerContext(ctx, gwn)
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
@@ -81,9 +80,8 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 	}()
 }
 
-func (w *Worker) buildWorkerContext(ctx context.Context, globalWorkerNum, localWorkerNum uint16) (context.Context, context.CancelFunc) {
-	ctx = context.WithValue(ctx, ctxKeyGlobalWorkerNumber, globalWorkerNum)
-	ctx = context.WithValue(ctx, ctxKeyLocalWorkerNumber, localWorkerNum)
+func (w *Worker) buildWorkerContext(ctx context.Context, gwn uint16) (context.Context, context.CancelFunc) {
+	ctx = context.WithValue(ctx, ctxKeyGlobalWorkerNumber, gwn)
 	return context.WithCancel(ctx)
 }
 

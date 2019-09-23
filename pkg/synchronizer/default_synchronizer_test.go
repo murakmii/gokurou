@@ -35,13 +35,13 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 	t.Run("まだWorkerが登録されていない場合、1を返す", func(t *testing.T) {
 		syncer := buildDefaultSynchronizer()
 
-		gwn, err := syncer.GetNextGlobalWorkerNumber()
+		gwn, err := syncer.AllocNextGWN()
 		if err != nil {
-			t.Errorf("GetNextGlobalWorkerNumber() = %v", err)
+			t.Errorf("AllocNextGWN() = %v", err)
 		}
 
 		if gwn != 1 {
-			t.Errorf("GetNextGlobalWorkerNumber() = %d, want = 1", gwn)
+			t.Errorf("AllocNextGWN() = %d, want = 1", gwn)
 		}
 	})
 
@@ -52,13 +52,13 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 			panic(err)
 		}
 
-		gwn, err := syncer.GetNextGlobalWorkerNumber()
+		gwn, err := syncer.AllocNextGWN()
 		if err != nil {
-			t.Errorf("GetNextGlobalWorkerNumber() = %v", err)
+			t.Errorf("AllocNextGWN() = %v", err)
 		}
 
 		if gwn != 4 {
-			t.Errorf("GetNextGlobalWorkerNumber() = %d, want = 4", gwn)
+			t.Errorf("AllocNextGWN() = %d, want = 4", gwn)
 		}
 	})
 }

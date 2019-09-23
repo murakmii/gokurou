@@ -28,7 +28,7 @@ func NewDefaultSynchronizer(conf *pkg.Configuration) (pkg.Synchronizer, error) {
 	}, nil
 }
 
-func (s *defaultSynchronizer) GetNextGlobalWorkerNumber() (uint16, error) {
+func (s *defaultSynchronizer) AllocNextGWN() (uint16, error) {
 	gwn, err := redis.Uint64(s.conn.Do("INCR", "gokurou_workers"))
 	if err != nil {
 		_ = s.Finish()
