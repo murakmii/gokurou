@@ -2,7 +2,8 @@ package pkg
 
 import (
 	"context"
-	"fmt"
+
+	"golang.org/x/xerrors"
 )
 
 type Configuration struct {
@@ -29,16 +30,16 @@ func (c *Configuration) TotalWorkers() uint16 {
 func (c *Configuration) FetchAdvancedAsString(key string) (string, error) {
 	value, ok := c.Advanced[key]
 	if !ok {
-		return "", fmt.Errorf("configuration key '%s' not found", key)
+		return "", xerrors.Errorf("configuration key '%s' not found", key)
 	}
 
 	asStr, ok := value.(string)
 	if !ok {
-		return "", fmt.Errorf("configuration key '%s' has not value as string", key)
+		return "", xerrors.Errorf("configuration key '%s' has not value as string", key)
 	}
 
 	if len(asStr) == 0 {
-		return "", fmt.Errorf("configuration key '%s' not found", key)
+		return "", xerrors.Errorf("configuration key '%s' not found", key)
 	}
 
 	return asStr, nil

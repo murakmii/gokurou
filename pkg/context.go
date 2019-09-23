@@ -2,10 +2,11 @@ package pkg
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"golang.org/x/xerrors"
 
 	"github.com/sirupsen/logrus"
 )
@@ -58,7 +59,7 @@ func ContextWithGWN(ctx context.Context, gwn uint16) context.Context {
 func LoggerFromContext(ctx context.Context) *logrus.Entry {
 	logger, ok := ctx.Value(gwnContextKey).(*logrus.Entry)
 	if !ok {
-		panic(fmt.Errorf("can't fetch logger from context"))
+		panic(xerrors.New("can't fetch logger from context"))
 	}
 
 	return logger
@@ -67,7 +68,7 @@ func LoggerFromContext(ctx context.Context) *logrus.Entry {
 func GWNFromContext(ctx context.Context) uint16 {
 	gwn, ok := ctx.Value(gwnContextKey).(uint16)
 	if !ok {
-		panic(fmt.Errorf("can't fetch global worker number from context"))
+		panic(xerrors.New("can't fetch global worker number from context"))
 	}
 
 	return gwn

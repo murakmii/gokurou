@@ -18,19 +18,22 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 	go func() {
 		defer wg.Done()
 
+		logger := LoggerFromContext(ctx)
+
 		syncer, err := conf.NewSynchronizer(conf)
 		if err != nil {
-			// TODO: error logging
+			logger.Errorf("failed to initialize synchronizer: %v", err)
 			return
 		}
 
 		gwn, err := syncer.AllocNextGWN()
 		if err != nil {
-			// TODO: error logging
+			logger.Errorf("failed to allocate global worker number: %v", err)
 			return
 		}
 
 		ctx, cancel := WorkerContext(ctx, gwn)
+		logger = LoggerFromContext(ctx)
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
@@ -60,7 +63,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 
 			if err := resOwner.Finish(); err != nil {
-				// TODO: error logging
+				logger.Errorf("failed to finish component: %v", err)
 			}
 		}
 	}()

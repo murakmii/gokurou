@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/xerrors"
+
 	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/murakmii/gokurou/pkg"
@@ -64,7 +66,7 @@ func NewDefaultArtifactCollector(_ context.Context, conf *pkg.Configuration) (pk
 func (c *defaultArtifactCollector) Collect(artifact interface{}) error {
 	b, ok := artifact.([]byte)
 	if !ok {
-		return fmt.Errorf("can't cast artifact to []byte")
+		return xerrors.New("can't cast artifact to []byte")
 	}
 
 	c.buffer.Write(b)
@@ -107,7 +109,7 @@ func (c *defaultArtifactCollector) upload() error {
 	if err = c.storage.put(key, c.buffer.Bytes()); err != nil {
 		c.errCount++
 		if c.errCount >= 5 {
-			return fmt.Errorf("can't upload artifact: %v", err)
+			return xerrors.Errorf("can't upload artifact: %w", err)
 		}
 
 		return nil
@@ -130,7 +132,7 @@ type s3ArtifactStorage struct {
 func newS3StoreFromConfiguration(conf *pkg.Configuration) (artifactStorage, error) {
 	sess, err := session.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("can't create aws session: %v", err)
+		return nil, xerrors.Errorf("can't create aws session: %v", err)
 	}
 
 	cred := credentials.NewStaticCredentials(
