@@ -30,7 +30,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			return
 		}
 
-		ctx, cancel := w.buildWorkerContext(ctx, gwn)
+		ctx, cancel := WorkerContext(ctx, gwn)
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
@@ -66,11 +66,8 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 	}()
 }
 
-func (w *Worker) buildWorkerContext(ctx context.Context, gwn uint16) (context.Context, context.CancelFunc) {
-	return context.WithCancel(ContextWithGWN(context.Background(), gwn))
-}
-
 func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactCollector, chan<- interface{}) {
+	ctx = ComponentContext(ctx, "artifact-collector")
 	inputCh := make(chan interface{}, 5)
 
 	ac, err := conf.NewArtifactCollector(ctx, conf)
@@ -99,6 +96,7 @@ func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration
 }
 
 func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, syncer Synchronizer, resultCh chan<- error) (URLFrontier, <-chan *html.SanitizedURL, chan<- *html.SanitizedURL) {
+	ctx = ComponentContext(ctx, "url-frontier")
 	popCh := make(chan *html.SanitizedURL, 5)
 	pushCh := make(chan *html.SanitizedURL, 10)
 
@@ -196,6 +194,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 }
 
 func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *html.SanitizedURL, out *OutputPipeline, resultCh chan<- error) Crawler {
+	ctx = ComponentContext(ctx, "crawler")
 	crawler, err := conf.NewCrawler(ctx, conf)
 	if err != nil {
 		resultCh <- err
