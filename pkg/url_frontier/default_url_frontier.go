@@ -149,13 +149,12 @@ func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*html.SanitizedURL
 			continue
 		}
 
+		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", url.Host()); err != nil {
+			return nil, err
+		}
+
 		return url, nil
 	}
-}
-
-func (frontier *defaultURLFrontier) MarkAsCrawled(ctx context.Context, url *html.SanitizedURL) error {
-	_, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", url.Host())
-	return err
 }
 
 func (frontier *defaultURLFrontier) Finish() error {

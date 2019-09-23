@@ -81,10 +81,6 @@ func (f *mockURLFrontier) Pop(ctx context.Context) (*html.SanitizedURL, error) {
 	}
 }
 
-func (f *mockURLFrontier) MarkAsCrawled(ctx context.Context, url *html.SanitizedURL) error {
-	return nil
-}
-
 func (s *mockURLFrontier) Finish() error { return nil }
 
 // Crawlerのモック。与えられたURLから次のクロール対象となるURLを生成していく

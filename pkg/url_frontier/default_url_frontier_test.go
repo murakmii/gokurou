@@ -140,7 +140,7 @@ func TestDefaultURLFrontier_Pop(t *testing.T) {
 			}
 		}
 
-		if err := frontier.MarkAsCrawled(ctx, urls[0]); err != nil {
+		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", urls[0].Host()); err != nil {
 			panic(err)
 		}
 
@@ -153,24 +153,6 @@ func TestDefaultURLFrontier_Pop(t *testing.T) {
 			t.Errorf("Pop() = %s, want = %s", poppedURL, urls[1].String())
 		}
 	})
-}
-
-func TestDefaultURLFrontier_MarkAsCrawled(t *testing.T) {
-	ctx := buildContext()
-	frontier := buildURLFrontier(ctx)
-
-	defer frontier.Finish()
-
-	url := buildRandomHostURL()
-	if err := frontier.MarkAsCrawled(ctx, url); err != nil {
-		t.Errorf("MarkAsCrawled(%s) = %v", url, err)
-	}
-
-	var marked int64
-	err := frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", url.Host()).Scan(&marked)
-	if err != nil {
-		t.Errorf("MarkAsCrawled(%s) does NOT mark as crawled", url)
-	}
 }
 
 func TestDefaultURLFrontier_Finish(t *testing.T) {
