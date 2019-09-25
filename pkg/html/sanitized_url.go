@@ -75,6 +75,11 @@ func (sanitized *SanitizedURL) Host() string {
 	return sanitized.url.Host
 }
 
+// URLのパス部を返す
+func (sanitized *SanitizedURL) Path() string {
+	return sanitized.url.Path
+}
+
 // ホスト部からSLDとTLDのみで構成されるドメイン名を生成して返す
 func (sanitized *SanitizedURL) SLDAndTLDOfHost() string {
 	labels := strings.Split(sanitized.Host(), ".")
