@@ -3,14 +3,24 @@ version: "2"
 services:
   redis:
     image: redis:5.0
-    container_name: "gokurou-dev-redis"
+    container_name: "gokurou-redis"
     ports:
       - "11111:6379"
   mysql:
     image: mysql:5.7
-    container_name: "gokurou-dev-mysql"
+    container_name: "gokurou-mysql"
+    volumes:
+      - "./docker/mysql:/docker-entrypoint-initdb.d"
     ports:
-      - "3306:3306"
+      - "11112:3306"
     environment:
-      - "MYSQL_DATABASE=gokurou_test"
-      - "MYSQL_ROOT_PASSWORD=test1234"
+      - "MYSQL_ROOT_PASSWORD=gokurou1234"
+  s3:
+    image: minio/minio
+    container_name: "gokurou-s3"
+    command: server /data
+    ports:
+      - "11113:9000"
+    environment:
+        - "MINIO_ACCESS_KEY=gokurou-s3-access-key"
+        - "MINIO_SECRET_KEY=gokurou-s3-secret-key"

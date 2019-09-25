@@ -21,7 +21,7 @@ func buildURLFrontier(ctx context.Context) *defaultURLFrontier {
 	conf := pkg.NewConfiguration(10)
 	conf.Workers = 1
 	conf.Machines = 1
-	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:test1234@/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
+	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
 	conf.Advanced["URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"] = func(_ uint16) string { return ":memory:" }
 
 	f, err := NewDefaultURLFrontier(ctx, conf)
