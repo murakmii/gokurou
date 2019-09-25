@@ -9,5 +9,5 @@ import (
 type Crawler interface {
 	ResourceOwner
 
-	Crawl(ctx context.Context, url *html.SanitizedURL, out *OutputPipeline) error
+	Crawl(ctx context.Context, url *html.SanitizedURL, out OutputPipeline) error
 }

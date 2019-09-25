@@ -197,7 +197,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 	return urlFrontier, popCh, pushCh
 }
 
-func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *html.SanitizedURL, out *OutputPipeline, resultCh chan<- error) Crawler {
+func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *html.SanitizedURL, out OutputPipeline, resultCh chan<- error) Crawler {
 	ctx = ComponentContext(ctx, "crawler")
 	crawler, err := conf.NewCrawler(ctx, conf)
 	if err != nil {
