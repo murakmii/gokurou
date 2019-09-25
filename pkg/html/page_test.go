@@ -23,7 +23,7 @@ func TestParseHTML(t *testing.T) {
 	}
 
 	t.Run("一般的なHTMLの場合", func(t *testing.T) {
-		html, err := ParseHTML(baseURL, openTestData("testdata/test.html"))
+		html, err := ParseHTML(openTestData("testdata/test.html"), baseURL)
 		if err != nil {
 			t.Errorf("ParseHTML(testdata/test.html) = error, want = no error")
 			return
@@ -50,7 +50,7 @@ func TestParseHTML(t *testing.T) {
 	})
 
 	t.Run("nofollowが全面的に指定されているHTMLの場合", func(t *testing.T) {
-		html, err := ParseHTML(baseURL, openTestData("testdata/nofollow.html"))
+		html, err := ParseHTML(openTestData("testdata/nofollow.html"), baseURL)
 		if err != nil {
 			t.Errorf("ParseHTML(testdata/nofollow.html) = error, want = no error")
 			return

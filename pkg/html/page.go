@@ -15,7 +15,7 @@ type Page struct {
 	noFollow bool
 }
 
-func ParseHTML(baseURL *SanitizedURL, r io.Reader) (*Page, error) {
+func ParseHTML(r io.Reader, baseURL *SanitizedURL) (*Page, error) {
 	page := &Page{allURL: make([]*SanitizedURL, 0, 100)}
 	tokenizer := html.NewTokenizer(r)
 	waitTitle := false
