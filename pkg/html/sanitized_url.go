@@ -30,6 +30,11 @@ func SanitizedURLFromURL(u *url.URL) (*SanitizedURL, error) {
 		return nil, fmt.Errorf("url's scheme is invalid: %s", sScheme)
 	}
 
+	// これは微妙にテストも考慮しており、localhostならportの指定があっても許可する
+	if !strings.HasPrefix(u.Host, "127.0.0.1:") && len(u.Port()) > 0 {
+		return nil, fmt.Errorf("url's has port")
+	}
+
 	sHost, err := idna.ToASCII(u.Host)
 	if err != nil {
 		return nil, fmt.Errorf("url has invalid host: %s", sHost)
