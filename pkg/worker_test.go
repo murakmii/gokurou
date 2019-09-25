@@ -90,7 +90,7 @@ func buildMockCrawler(_ context.Context, _ *Configuration) (Crawler, error) {
 	return &mockCrawler{}, nil
 }
 
-func (c *mockCrawler) Crawl(ctx context.Context, url *html.SanitizedURL, out *OutputPipeline) error {
+func (c *mockCrawler) Crawl(ctx context.Context, url *html.SanitizedURL, out OutputPipeline) error {
 	parts := strings.Split(url.Host(), ".")
 	no, err := strconv.Atoi(parts[0])
 	if err != nil {
