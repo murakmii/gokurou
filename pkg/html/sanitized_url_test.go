@@ -78,6 +78,50 @@ func TestSanitizedURLFromString(t *testing.T) {
 	})
 }
 
+func TestSanitizedURL_SLDAndTLDOfHost(t *testing.T) {
+	tests := []struct {
+		in  string
+		out string
+	}{
+		{
+			in:  "http://www.example.com",
+			out: "example.com",
+		},
+		{
+			in:  "http://www.sub.example.com",
+			out: "example.com",
+		},
+		{
+			in:  "http://example.com",
+			out: "example.com",
+		},
+	}
+
+	for _, test := range tests {
+		url, err := SanitizedURLFromString(test.in)
+		if err != nil {
+			t.Error(err)
+		}
+
+		if url.SLDAndTLDOfHost() != test.out {
+			t.Errorf("SLDAndTLDOfHost() = %s, want = %s", url.SLDAndTLDOfHost(), test.out)
+		}
+	}
+}
+
+func TestSanitizedURL_RobotsTxtURL(t *testing.T) {
+	url, err := SanitizedURLFromString("http://example.com/path/to/page")
+	if err != nil {
+		t.Error(err)
+	}
+
+	want := "http://example.com/robots.txt"
+
+	if url.RobotsTxtURL().String() != want {
+		t.Errorf("RobotsTxtURL() = %s, want = %s", url.RobotsTxtURL().String(), want)
+	}
+}
+
 func TestSanitizedURL_Join(t *testing.T) {
 	tests := []struct {
 		in  string
