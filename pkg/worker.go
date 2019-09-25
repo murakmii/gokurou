@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/murakmii/gokurou/pkg/html"
 )
 
@@ -207,6 +209,11 @@ func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-
 		for {
 			select {
 			case url := <-popCh:
+				// loggerにUUIDを付ける
+				id, _ := uuid.NewRandom()
+				logger := LoggerFromContext(ctx)
+				ctx = ContextWithLogger(ctx, logger.WithField("id", id.String()))
+
 				if err := crawler.Crawl(ctx, url, out); err != nil {
 					resultCh <- err
 					return
