@@ -2,27 +2,25 @@ package robots
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"testing"
 )
 
-func loadTestData(path string) string {
+func loadTestData(path string) io.ReadCloser {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(fmt.Sprintf("can't load test data: '%s'", path))
 	}
 
-	bytes, err := ioutil.ReadAll(f)
-	if err != nil {
-		panic(fmt.Sprintf("can't read test data: '%s'", path))
-	}
-
-	return string(bytes)
+	return f
 }
 
 func Test_FromString(t *testing.T) {
-	txt, err := FromString("gokurou", "googlebot", loadTestData("testdata/robots.txt"))
+	data := loadTestData("testdata/robots.txt")
+	defer data.Close()
+
+	txt, err := NewRobotsTxt(data, "gokurou", "googlebot")
 	if err != nil {
 		t.Errorf("FromString returns error!")
 	}
@@ -72,7 +70,10 @@ func Test_FromString(t *testing.T) {
 }
 
 func TestTxt_Allows(t *testing.T) {
-	txt, err := FromString("gokurou", "googlebot", loadTestData("testdata/robots.txt"))
+	data := loadTestData("testdata/robots.txt")
+	defer data.Close()
+
+	txt, err := NewRobotsTxt(data, "gokurou", "googlebot")
 	if err != nil {
 		t.Errorf("FromString returns error!")
 	}
@@ -83,7 +84,10 @@ func TestTxt_Allows(t *testing.T) {
 }
 
 func TestTxt_Delay(t *testing.T) {
-	txt, err := FromString("gokurou", "googlebot", loadTestData("testdata/robots.txt"))
+	data := loadTestData("testdata/robots.txt")
+	defer data.Close()
+
+	txt, err := NewRobotsTxt(data, "gokurou", "googlebot")
 	if err != nil {
 		t.Errorf("FromString returns error!")
 	}

@@ -3,6 +3,7 @@ package robots
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -29,7 +30,7 @@ type group struct {
 }
 
 // 文字列からTxtを生成して返す
-func FromString(primaryGroup string, secondaryGroup string, robotsTxt string) (*Txt, error) {
+func NewRobotsTxt(reader io.Reader, primaryGroup string, secondaryGroup string) (*Txt, error) {
 	txt := &Txt{
 		primaryGroup:   primaryGroup,
 		secondaryGroup: secondaryGroup,
@@ -39,7 +40,7 @@ func FromString(primaryGroup string, secondaryGroup string, robotsTxt string) (*
 
 	currentGrp := txt.anonymous
 
-	r := bufio.NewScanner(strings.NewReader(robotsTxt))
+	r := bufio.NewScanner(reader)
 	for r.Scan() {
 		entry, err := parseEntry(r.Text())
 		if err != nil || entry.isComment() {
