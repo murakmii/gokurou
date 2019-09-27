@@ -1,4 +1,4 @@
-package pkg
+package gokurou
 
 // クロールにおける結果収集の実装の抽象
 type ArtifactCollector interface {

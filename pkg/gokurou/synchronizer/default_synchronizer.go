@@ -3,8 +3,9 @@ package synchronizer
 import (
 	"net"
 
+	"github.com/murakmii/gokurou/pkg/gokurou"
+
 	"github.com/gomodule/redigo/redis"
-	"github.com/murakmii/gokurou/pkg"
 )
 
 const (
@@ -16,7 +17,7 @@ type defaultSynchronizer struct {
 	nameResolver func(host string) ([]net.IP, error)
 }
 
-func NewDefaultSynchronizer(conf *pkg.Configuration) (pkg.Synchronizer, error) {
+func NewDefaultSynchronizer(conf *gokurou.Configuration) (gokurou.Synchronizer, error) {
 	conn, err := redis.DialURL(conf.MustFetchAdvancedAsString(redisURLConfName))
 	if err != nil {
 		return nil, err

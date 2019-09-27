@@ -1,4 +1,4 @@
-package pkg
+package gokurou
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/murakmii/gokurou/pkg/html"
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
 
 	"golang.org/x/xerrors"
 )
@@ -54,24 +54,24 @@ func (ac *mockArtifactCollector) Finish() error { return nil }
 
 // URLFrontierのモック。queueをURLのキューとしクロール対象の供給と保存を行う
 type mockURLFrontier struct {
-	queue []*html.SanitizedURL
+	queue []*www.SanitizedURL
 }
 
 func buildMockURLFrontier(_ context.Context, _ *Configuration) (URLFrontier, error) {
-	initialURL, err := html.SanitizedURLFromString("http://1.com")
+	initialURL, err := www.SanitizedURLFromString("http://1.com")
 	if err != nil {
 		panic(err)
 	}
 
-	return &mockURLFrontier{queue: []*html.SanitizedURL{initialURL}}, nil
+	return &mockURLFrontier{queue: []*www.SanitizedURL{initialURL}}, nil
 }
 
-func (f *mockURLFrontier) Push(ctx context.Context, url *html.SanitizedURL) error {
+func (f *mockURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
 	f.queue = append(f.queue, url)
 	return nil
 }
 
-func (f *mockURLFrontier) Pop(ctx context.Context) (*html.SanitizedURL, error) {
+func (f *mockURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	if len(f.queue) == 0 {
 		return nil, nil
 	} else {
@@ -90,7 +90,7 @@ func buildMockCrawler(_ context.Context, _ *Configuration) (Crawler, error) {
 	return &mockCrawler{}, nil
 }
 
-func (c *mockCrawler) Crawl(ctx context.Context, url *html.SanitizedURL, out OutputPipeline) error {
+func (c *mockCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out OutputPipeline) error {
 	parts := strings.Split(url.Host(), ".")
 	no, err := strconv.Atoi(parts[0])
 	if err != nil {
@@ -103,12 +103,12 @@ func (c *mockCrawler) Crawl(ctx context.Context, url *html.SanitizedURL, out Out
 		return nil
 	}
 
-	nextComURL, err := html.SanitizedURLFromString(fmt.Sprintf("http://%d.com", no+1))
+	nextComURL, err := www.SanitizedURLFromString(fmt.Sprintf("http://%d.com", no+1))
 	if err != nil {
 		panic(err)
 	}
 
-	nextOrgURL, err := html.SanitizedURLFromString(fmt.Sprintf("http://%d.org", no+1))
+	nextOrgURL, err := www.SanitizedURLFromString(fmt.Sprintf("http://%d.org", no+1))
 	if err != nil {
 		panic(err)
 	}

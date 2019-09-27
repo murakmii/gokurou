@@ -8,14 +8,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/murakmii/gokurou/pkg/gokurou"
+
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
+
 	"golang.org/x/net/html/charset"
 
 	"golang.org/x/xerrors"
 
-	"github.com/murakmii/gokurou/pkg/robots"
-
-	"github.com/murakmii/gokurou/pkg"
-	"github.com/murakmii/gokurou/pkg/html"
+	"github.com/murakmii/gokurou/pkg/gokurou/robots"
 )
 
 type defaultCrawler struct {
@@ -43,7 +44,7 @@ var robotsTxtRedirectPolicy = func(req *http.Request, via []*http.Request) error
 		return http.ErrUseLastResponse
 	}
 
-	before, err := html.SanitizedURLFromURL(via[len(via)-1].URL)
+	before, err := www.SanitizedURLFromURL(via[len(via)-1].URL)
 	if err != nil {
 		return http.ErrUseLastResponse
 	}
@@ -57,7 +58,7 @@ var robotsTxtRedirectPolicy = func(req *http.Request, via []*http.Request) error
 		return http.ErrUseLastResponse
 	}
 
-	pkg.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
+	gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
 	return nil
 }
 
@@ -68,7 +69,7 @@ var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
-	before, err := html.SanitizedURLFromURL(via[len(via)-1].URL)
+	before, err := www.SanitizedURLFromURL(via[len(via)-1].URL)
 	if err != nil {
 		return http.ErrUseLastResponse
 	}
@@ -82,12 +83,12 @@ var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
-	pkg.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
+	gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
 	return nil
 }
 
 // Crawlerを生成して返す
-func NewDefaultCrawler(ctx context.Context, conf *pkg.Configuration) (pkg.Crawler, error) {
+func NewDefaultCrawler(ctx context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
 	defaultRobotsTxt, err := robots.NewRobotsTxt(bytes.NewBuffer(nil), conf.UserAgentOnRobotsTxt, "googlebot")
 	if err != nil {
 		return nil, xerrors.Errorf("failed to build default robots.txt: %w", err)
@@ -109,8 +110,8 @@ func NewDefaultCrawler(ctx context.Context, conf *pkg.Configuration) (pkg.Crawle
 	}, nil
 }
 
-func (crawler *defaultCrawler) Crawl(ctx context.Context, url *html.SanitizedURL, out pkg.OutputPipeline) error {
-	logger := pkg.LoggerFromContext(ctx)
+func (crawler *defaultCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out gokurou.OutputPipeline) error {
+	logger := gokurou.LoggerFromContext(ctx)
 
 	robotsTxt := crawler.requestToGetRobotsTxtOf(ctx, url)
 	if !robotsTxt.Allows(url.Path()) {
@@ -158,7 +159,7 @@ func (crawler *defaultCrawler) Crawl(ctx context.Context, url *html.SanitizedURL
 		return nil
 	}
 
-	page, err := html.ParseHTML(reader, url)
+	page, err := www.ParseHTML(reader, url)
 	if err != nil {
 		return nil
 	}
@@ -171,7 +172,7 @@ func (crawler *defaultCrawler) Crawl(ctx context.Context, url *html.SanitizedURL
 	baseArtifact.Title = page.Title()
 
 	// どうせ1ホストあたり1回しかクロールしないので、この時点で1ホスト1URLになるようにフィルタしてから結果を送信する
-	urlPerHost := make(map[string]*html.SanitizedURL)
+	urlPerHost := make(map[string]*www.SanitizedURL)
 	for _, collectedURL := range page.AllURL() {
 		if collectedURL.Host() == url.Host() {
 			continue
@@ -197,13 +198,13 @@ func (crawler *defaultCrawler) Finish() error {
 
 // robots.txtを取得する
 // このメソッドはエラーを返さず、意図したrobots.txtが取得できないならデフォルトのそれを返す
-func (crawler *defaultCrawler) requestToGetRobotsTxtOf(ctx context.Context, url *html.SanitizedURL) (robotsTxt *robots.Txt) {
+func (crawler *defaultCrawler) requestToGetRobotsTxtOf(ctx context.Context, url *www.SanitizedURL) (robotsTxt *robots.Txt) {
 	robotsTxt = crawler.defaultRobotsTxt
 
 	resp, err := crawler.buildRequestToGet(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
 		if err != nil {
-			pkg.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
+			gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
 		}
 	}()
 
@@ -232,8 +233,8 @@ func (crawler *defaultCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 	return
 }
 
-func (crawler *defaultCrawler) buildRequestToGet(ctx context.Context, url *html.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
-	pkg.LoggerFromContext(ctx).Debugf("preparing: %s", url)
+func (crawler *defaultCrawler) buildRequestToGet(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
+	gokurou.LoggerFromContext(ctx).Debugf("preparing: %s", url)
 
 	req, err := http.NewRequest("GET", url.String(), nil)
 	if err != nil {

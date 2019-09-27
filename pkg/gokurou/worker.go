@@ -1,13 +1,13 @@
-package pkg
+package gokurou
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
 
-	"github.com/murakmii/gokurou/pkg/html"
+	"github.com/google/uuid"
 )
 
 type Worker struct{}
@@ -100,10 +100,10 @@ func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration
 	return ac, inputCh
 }
 
-func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, syncer Synchronizer, resultCh chan<- error) (URLFrontier, <-chan *html.SanitizedURL, chan<- *html.SanitizedURL) {
+func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, syncer Synchronizer, resultCh chan<- error) (URLFrontier, <-chan *www.SanitizedURL, chan<- *www.SanitizedURL) {
 	ctx = ComponentContext(ctx, "url-frontier")
-	popCh := make(chan *html.SanitizedURL, 5)
-	pushCh := make(chan *html.SanitizedURL, 10)
+	popCh := make(chan *www.SanitizedURL, 5)
+	pushCh := make(chan *www.SanitizedURL, 10)
 
 	urlFrontier, err := conf.NewURLFrontier(ctx, conf)
 	if err != nil {
@@ -197,7 +197,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 	return urlFrontier, popCh, pushCh
 }
 
-func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *html.SanitizedURL, out OutputPipeline, resultCh chan<- error) Crawler {
+func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *www.SanitizedURL, out OutputPipeline, resultCh chan<- error) Crawler {
 	ctx = ComponentContext(ctx, "crawler")
 	crawler, err := conf.NewCrawler(ctx, conf)
 	if err != nil {

@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/murakmii/gokurou/pkg/gokurou"
+
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
+
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/murakmii/gokurou/pkg"
-	"github.com/murakmii/gokurou/pkg/html"
 )
 
 const (
@@ -28,7 +30,7 @@ type defaultURLFrontier struct {
 	popBuffer []string
 }
 
-func NewDefaultURLFrontier(ctx context.Context, conf *pkg.Configuration) (pkg.URLFrontier, error) {
+func NewDefaultURLFrontier(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
 	var err error
 
 	sharedDB, err := sql.Open("mysql", conf.MustFetchAdvancedAsString(sharedDBSourceConfName))
@@ -47,7 +49,7 @@ func NewDefaultURLFrontier(ctx context.Context, conf *pkg.Configuration) (pkg.UR
 		return nil, fmt.Errorf("can't get local db path provider from configuration")
 	}
 
-	localDB, err := sql.Open("sqlite3", pathProvider(pkg.GWNFromContext(ctx)))
+	localDB, err := sql.Open("sqlite3", pathProvider(gokurou.GWNFromContext(ctx)))
 	if err != nil {
 		_ = sharedDB.Close()
 		return nil, err
@@ -76,7 +78,7 @@ func NewDefaultURLFrontier(ctx context.Context, conf *pkg.Configuration) (pkg.UR
 	}, nil
 }
 
-func (frontier *defaultURLFrontier) Push(ctx context.Context, url *html.SanitizedURL) error {
+func (frontier *defaultURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
 	hash, err := url.HashNumber()
 	if err != nil {
 		return err
@@ -110,13 +112,13 @@ func (frontier *defaultURLFrontier) Push(ctx context.Context, url *html.Sanitize
 	return nil
 }
 
-func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*html.SanitizedURL, error) {
+func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	for {
 		if len(frontier.popBuffer) == 0 {
 			var id int64
 			var tabJoinedURL string
 			query := "SELECT id, tab_joined_url FROM urls WHERE gwn = ? AND id > ? ORDER BY id"
-			err := frontier.sharedDB.QueryRow(query, pkg.GWNFromContext(ctx), frontier.nextPopID).Scan(&id, &tabJoinedURL)
+			err := frontier.sharedDB.QueryRow(query, gokurou.GWNFromContext(ctx), frontier.nextPopID).Scan(&id, &tabJoinedURL)
 
 			if err == sql.ErrNoRows {
 				return nil, nil
@@ -128,7 +130,7 @@ func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*html.SanitizedURL
 			frontier.popBuffer = strings.Split(tabJoinedURL, "\t")
 		}
 
-		url, err := html.SanitizedURLFromString(frontier.popBuffer[0])
+		url, err := www.SanitizedURLFromString(frontier.popBuffer[0])
 		if err != nil {
 			return nil, err
 		}

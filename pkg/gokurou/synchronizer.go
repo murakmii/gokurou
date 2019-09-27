@@ -1,4 +1,4 @@
-package pkg
+package gokurou
 
 type Synchronizer interface {
 	ResourceOwner

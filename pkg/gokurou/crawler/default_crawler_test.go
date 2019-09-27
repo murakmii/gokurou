@@ -7,19 +7,19 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/murakmii/gokurou/pkg/html"
+	"github.com/murakmii/gokurou/pkg/gokurou"
 
-	"github.com/murakmii/gokurou/pkg"
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
 )
 
 type mockPipeline struct {
-	pushed    []*html.SanitizedURL
+	pushed    []*www.SanitizedURL
 	collected [][]byte
 }
 
 func buildMockPipeline() *mockPipeline {
 	return &mockPipeline{
-		pushed:    make([]*html.SanitizedURL, 0),
+		pushed:    make([]*www.SanitizedURL, 0),
 		collected: make([][]byte, 0),
 	}
 }
@@ -28,12 +28,12 @@ func (p *mockPipeline) OutputArtifact(ctx context.Context, artifact interface{})
 	p.collected = append(p.collected, artifact.([]byte))
 }
 
-func (p *mockPipeline) OutputCollectedURL(ctx context.Context, url *html.SanitizedURL) {
+func (p *mockPipeline) OutputCollectedURL(ctx context.Context, url *www.SanitizedURL) {
 	p.pushed = append(p.pushed, url)
 }
 
-func buildConfiguration() *pkg.Configuration {
-	conf := pkg.NewConfiguration(1)
+func buildConfiguration() *gokurou.Configuration {
+	conf := gokurou.NewConfiguration(1)
 	conf.Machines = 1
 	conf.UserAgent = "gokurou"
 	conf.UserAgentOnRobotsTxt = "gokurou"
@@ -61,7 +61,7 @@ func buildTestServer() *httptest.Server {
 }
 
 func TestDefaultCrawler_Crawl(t *testing.T) {
-	ctx := pkg.RootContext()
+	ctx := gokurou.RootContext()
 	crawler, err := NewDefaultCrawler(ctx, buildConfiguration())
 	if err != nil {
 		panic(err)
@@ -72,7 +72,7 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 	t.Run("問題なくクロールできる場合、結果を収集する", func(t *testing.T) {
 		out := buildMockPipeline()
-		url, _ := html.SanitizedURLFromString(ts.URL + "/index.html")
+		url, _ := www.SanitizedURLFromString(ts.URL + "/index.html")
 
 		err := crawler.Crawl(ctx, url, out)
 		if err != nil {
@@ -99,7 +99,7 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 	t.Run("noindexなページの場合、結果を収集しない", func(t *testing.T) {
 		out := buildMockPipeline()
-		url, _ := html.SanitizedURLFromString(ts.URL + "/noindex.html")
+		url, _ := www.SanitizedURLFromString(ts.URL + "/noindex.html")
 
 		err := crawler.Crawl(ctx, url, out)
 		if err != nil {
@@ -113,7 +113,7 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 	t.Run("robots.txtでインデックスを禁止されているページの場合、結果を収集しない", func(t *testing.T) {
 		out := buildMockPipeline()
-		url, _ := html.SanitizedURLFromString(ts.URL + "/noindex.html")
+		url, _ := www.SanitizedURLFromString(ts.URL + "/noindex.html")
 
 		err := crawler.Crawl(ctx, url, out)
 		if err != nil {

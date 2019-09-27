@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/murakmii/gokurou/pkg/gokurou"
+
 	"golang.org/x/xerrors"
 
 	"github.com/aws/aws-sdk-go/aws"
-
-	"github.com/murakmii/gokurou/pkg"
 
 	"github.com/google/uuid"
 
@@ -46,7 +46,7 @@ const (
 )
 
 // 新しいNewDefaultArtifactCollectorを生成する
-func NewDefaultArtifactCollector(_ context.Context, conf *pkg.Configuration) (pkg.ArtifactCollector, error) {
+func NewDefaultArtifactCollector(_ context.Context, conf *gokurou.Configuration) (gokurou.ArtifactCollector, error) {
 	store, err := newS3StoreFromConfiguration(conf)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ type s3ArtifactStorage struct {
 }
 
 // 新しくs3ArtifactStoreを生成する
-func newS3StoreFromConfiguration(conf *pkg.Configuration) (artifactStorage, error) {
+func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, xerrors.Errorf("can't create aws session: %v", err)

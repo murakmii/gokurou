@@ -6,19 +6,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/murakmii/gokurou/pkg/gokurou"
+
+	"github.com/murakmii/gokurou/pkg/gokurou/www"
+
 	"github.com/google/uuid"
-
-	"github.com/murakmii/gokurou/pkg/html"
-
-	"github.com/murakmii/gokurou/pkg"
 )
 
 func buildContext() context.Context {
-	return pkg.ContextWithGWN(context.Background(), uint16(1))
+	return gokurou.ContextWithGWN(context.Background(), uint16(1))
 }
 
 func buildURLFrontier(ctx context.Context) *defaultURLFrontier {
-	conf := pkg.NewConfiguration(10)
+	conf := gokurou.NewConfiguration(10)
 	conf.Workers = 1
 	conf.Machines = 1
 	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
@@ -37,13 +37,13 @@ func buildURLFrontier(ctx context.Context) *defaultURLFrontier {
 	return frontier
 }
 
-func buildRandomHostURL() *html.SanitizedURL {
+func buildRandomHostURL() *www.SanitizedURL {
 	u, err := uuid.NewRandom()
 	if err != nil {
 		panic(err)
 	}
 
-	url, err := html.SanitizedURLFromString(fmt.Sprintf("http://example-%s.com", u.String()))
+	url, err := www.SanitizedURLFromString(fmt.Sprintf("http://example-%s.com", u.String()))
 	if err != nil {
 		panic(err)
 	}
@@ -133,7 +133,7 @@ func TestDefaultURLFrontier_Pop(t *testing.T) {
 	})
 
 	t.Run("PopしたURLがクロール済みのものだった場合、次のURLを返す", func(t *testing.T) {
-		urls := []*html.SanitizedURL{buildRandomHostURL(), buildRandomHostURL()}
+		urls := []*www.SanitizedURL{buildRandomHostURL(), buildRandomHostURL()}
 		for _, url := range urls {
 			if err := frontier.Push(ctx, url); err != nil {
 				panic(err)
