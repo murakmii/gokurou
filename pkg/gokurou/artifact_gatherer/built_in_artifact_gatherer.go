@@ -41,6 +41,7 @@ const (
 	awsRegionConfKey          = "built_in.aws.region"
 	awsAccessKeyIDConfKey     = "built_in.aws.access_key_id"
 	awsSecretAccessKeyConfKey = "built_in.aws.secret_access_key"
+	awsS3EndpointConfKey      = "built_in.aws.s3_endpoint"
 	keyPrefixConfKey          = "built_in.artifact_gatherer.gathered_item_prefix"
 	bucketConfKey             = "built_in.artifact_gatherer.bucket"
 )
@@ -141,8 +142,14 @@ func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, 
 		"",
 	)
 
+	s3config := aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustOptionAsString(awsRegionConfKey))
+	endpoint := conf.OptionAsString(awsS3EndpointConfKey)
+	if endpoint != nil {
+		s3config = s3config.WithEndpoint(*endpoint).WithS3ForcePathStyle(true)
+	}
+
 	return &s3ArtifactStorage{
-		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustOptionAsString(awsRegionConfKey))),
+		s3:     s3.New(sess, s3config),
 		bucket: conf.MustOptionAsString(bucketConfKey),
 	}, nil
 }
