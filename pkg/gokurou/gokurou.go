@@ -59,7 +59,7 @@ func Start(conf *Configuration) {
 	ctx := RootContext()
 	wg := &sync.WaitGroup{}
 
-	for i := uint16(0); i < conf.Workers; i++ {
+	for i := uint(0); i < conf.Workers; i++ {
 		wg.Add(1)
 		NewWorker().Start(ctx, wg, conf)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	redisURLConfName = "REDIS_URL"
+	redisURLConfKey = "built_in.redis_url"
 )
 
 type builtInCoordinator struct {
@@ -18,7 +18,7 @@ type builtInCoordinator struct {
 }
 
 func BuiltInCoordinatorProvider(conf *gokurou.Configuration) (gokurou.Coordinator, error) {
-	conn, err := redis.DialURL(conf.MustFetchAdvancedAsString(redisURLConfName))
+	conn, err := redis.DialURL(conf.MustOptionAsString(redisURLConfKey))
 	if err != nil {
 		return nil, err
 	}

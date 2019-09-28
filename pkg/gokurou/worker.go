@@ -105,7 +105,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 	popCh := make(chan *www.SanitizedURL, 5)
 	pushCh := make(chan *www.SanitizedURL, 10)
 
-	urlFrontier, err := conf.NewURLFrontier(ctx, conf)
+	urlFrontier, err := conf.URLFrontierProvider(ctx, conf)
 	if err != nil {
 		resultCh <- err
 		return nil, popCh, pushCh
@@ -199,7 +199,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *www.SanitizedURL, out OutputPipeline, resultCh chan<- error) Crawler {
 	ctx = ComponentContext(ctx, "crawler")
-	crawler, err := conf.NewCrawler(ctx, conf)
+	crawler, err := conf.CrawlerProvider(ctx, conf)
 	if err != nil {
 		resultCh <- err
 		return nil

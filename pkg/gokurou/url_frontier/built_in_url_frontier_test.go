@@ -18,11 +18,9 @@ func buildContext() context.Context {
 }
 
 func buildURLFrontier(ctx context.Context) *builtInURLFrontier {
-	conf := gokurou.NewConfiguration(10)
-	conf.Workers = 1
-	conf.Machines = 1
-	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
-	conf.Advanced["URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"] = func(_ uint16) string { return ":memory:" }
+	conf := gokurou.NewConfiguration(1, 1)
+	conf.Options["built_in.url_frontier.shared_db_source"] = "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
+	conf.Options["built_in.url_frontier.local_db_path"] = nil
 
 	f, err := BuiltInURLFrontierProvider(ctx, conf)
 	if err != nil {

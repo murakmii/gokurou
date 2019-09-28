@@ -15,15 +15,15 @@ import (
 )
 
 const (
-	sharedDBSourceConfName      = "URL_FRONTIER_SHARED_DB_SOURCE"
-	localDBPathProviderConfName = "URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"
+	sharedDBSourceConfKey = "built_in.url_frontier.shared_db_source"
+	localDBPathConfKey    = "built_in.url_frontier.local_db_path"
 )
 
 type builtInURLFrontier struct {
 	sharedDB     *sql.DB
-	totalWorkers uint32
-	pushBuffer   map[uint32][]string
-	pushedCount  map[uint32]uint64
+	totalWorkers uint
+	pushBuffer   map[uint][]string
+	pushedCount  map[uint]uint64
 
 	localDB   *sql.DB
 	nextPopID int64
@@ -33,7 +33,7 @@ type builtInURLFrontier struct {
 func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
 	var err error
 
-	sharedDB, err := sql.Open("mysql", conf.MustFetchAdvancedAsString(sharedDBSourceConfName))
+	sharedDB, err := sql.Open("mysql", conf.MustOptionAsString(sharedDBSourceConfKey))
 	if err != nil {
 		return nil, err
 	}
@@ -44,12 +44,18 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		}
 	}()
 
-	pathProvider, ok := conf.Advanced[localDBPathProviderConfName].(func(uint16) string)
-	if !ok {
-		return nil, fmt.Errorf("can't get local db path provider from configuration")
+	sharedDB.SetMaxOpenConns(1)
+	sharedDB.SetMaxIdleConns(1)
+
+	localDBPathPtr := conf.OptionAsString(localDBPathConfKey)
+	var localDBPath string
+	if localDBPathPtr == nil {
+		localDBPath = ":memory:"
+	} else {
+		localDBPath = fmt.Sprintf(*localDBPathPtr, gokurou.GWNFromContext(ctx))
 	}
 
-	localDB, err := sql.Open("sqlite3", pathProvider(gokurou.GWNFromContext(ctx)))
+	localDB, err := sql.Open("sqlite3", localDBPath)
 	if err != nil {
 		_ = sharedDB.Close()
 		return nil, err
@@ -69,9 +75,9 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 
 	return &builtInURLFrontier{
 		sharedDB:     sharedDB,
-		totalWorkers: uint32(conf.TotalWorkers()),
-		pushBuffer:   make(map[uint32][]string),
-		pushedCount:  make(map[uint32]uint64),
+		totalWorkers: conf.TotalWorkers(),
+		pushBuffer:   make(map[uint][]string),
+		pushedCount:  make(map[uint]uint64),
 		localDB:      localDB,
 		nextPopID:    0,
 		popBuffer:    make([]string, 0),
@@ -84,7 +90,7 @@ func (frontier *builtInURLFrontier) Push(ctx context.Context, url *www.Sanitized
 		return err
 	}
 
-	gwn := hash%frontier.totalWorkers + 1
+	gwn := uint(uint(hash)%frontier.totalWorkers + 1)
 	if _, ok := frontier.pushBuffer[gwn]; !ok {
 		frontier.pushBuffer[gwn] = make([]string, 0, 51)
 	}

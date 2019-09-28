@@ -33,10 +33,10 @@ func (p *mockPipeline) OutputCollectedURL(ctx context.Context, url *www.Sanitize
 }
 
 func buildConfiguration() *gokurou.Configuration {
-	conf := gokurou.NewConfiguration(1)
-	conf.Machines = 1
-	conf.UserAgent = "gokurou"
-	conf.UserAgentOnRobotsTxt = "gokurou"
+	conf := gokurou.NewConfiguration(1, 1)
+	conf.Options["built_in.crawler.header_ua"] = "test"
+	conf.Options["built_in.crawler.primary_ua"] = "gokurou"
+	conf.Options["built_in.crawler.secondary_ua"] = "google"
 	return conf
 }
 

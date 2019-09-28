@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aws/aws-sdk-go/aws"
+
 	"github.com/murakmii/gokurou/pkg/gokurou"
 
 	"golang.org/x/xerrors"
-
-	"github.com/aws/aws-sdk-go/aws"
 
 	"github.com/google/uuid"
 
@@ -38,11 +38,11 @@ type builtInArtifactGatherer struct {
 }
 
 const (
-	awsRegionConfName = "AWS_REGION"
-	awsIDConfName     = "AWS_ACCESS_ID"
-	awsSecretConfName = "AWS_ACCESS_SECRET"
-	keyPrefixConfName = "ARTIFACT_COLLECTOR_KEY_PREFIX"
-	bucketConfName    = "ARTIFACT_COLLECTOR_BUCKET"
+	awsRegionConfKey          = "built_in.aws.region"
+	awsAccessKeyIDConfKey     = "built_in.aws.access_key_id"
+	awsSecretAccessKeyConfKey = "built_in.aws.secret_access_key"
+	keyPrefixConfKey          = "built_in.artifact_gatherer.gathered_item_prefix"
+	bucketConfKey             = "built_in.artifact_gatherer.bucket"
 )
 
 // 新しいArtifactGathererを生成する
@@ -54,7 +54,7 @@ func BuiltInArtifactGathererProvider(_ context.Context, conf *gokurou.Configurat
 
 	return &builtInArtifactGatherer{
 		storage:     store,
-		prefix:      conf.MustFetchAdvancedAsString(keyPrefixConfName),
+		prefix:      conf.MustOptionAsString(keyPrefixConfKey),
 		buffer:      bytes.NewBuffer(nil),
 		bufCount:    0,
 		maxBuffered: 100,
@@ -136,14 +136,14 @@ func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, 
 	}
 
 	cred := credentials.NewStaticCredentials(
-		conf.MustFetchAdvancedAsString(awsIDConfName),
-		conf.MustFetchAdvancedAsString(awsSecretConfName),
+		conf.MustOptionAsString(awsAccessKeyIDConfKey),
+		conf.MustOptionAsString(awsSecretAccessKeyConfKey),
 		"",
 	)
 
 	return &s3ArtifactStorage{
-		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustFetchAdvancedAsString(awsRegionConfName))),
-		bucket: conf.MustFetchAdvancedAsString(bucketConfName),
+		s3:     s3.New(sess, aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustOptionAsString(awsRegionConfKey))),
+		bucket: conf.MustOptionAsString(bucketConfKey),
 	}, nil
 }
 

@@ -19,9 +19,16 @@ import (
 	"github.com/murakmii/gokurou/pkg/gokurou/robots"
 )
 
+const (
+	headerUAConfKey    = "built_in.crawler.header_ua"
+	primaryUAConfKey   = "built_in.crawler.primary_ua"
+	secondaryUAConfKey = "built_in.crawler.secondary_ua"
+)
+
 type builtInCrawler struct {
-	ua               string
-	uaOnRobotsTxt    string
+	headerUA         string
+	primaryUA        string
+	secondaryUA      string
 	defaultRobotsTxt *robots.Txt
 	httpClient       *http.Client
 }
@@ -89,14 +96,18 @@ var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
 
 // Crawlerを生成して返す
 func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
-	defaultRobotsTxt, err := robots.NewRobotsTxt(bytes.NewBuffer(nil), conf.UserAgentOnRobotsTxt, "googlebot")
+	primaryUA := conf.MustOptionAsString(primaryUAConfKey)
+	secondaryUA := conf.MustOptionAsString(secondaryUAConfKey)
+
+	defaultRobotsTxt, err := robots.NewRobotsTxt(bytes.NewBuffer(nil), primaryUA, secondaryUA)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to build default robots.txt: %w", err)
 	}
 
 	return &builtInCrawler{
-		ua:               conf.UserAgent,
-		uaOnRobotsTxt:    conf.UserAgentOnRobotsTxt,
+		headerUA:         conf.MustOptionAsString(headerUAConfKey),
+		primaryUA:        primaryUA,
+		secondaryUA:      secondaryUA,
 		defaultRobotsTxt: defaultRobotsTxt,
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -225,7 +236,7 @@ func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 		return
 	}
 
-	robotsTxt, err = robots.NewRobotsTxt(reader, crawler.uaOnRobotsTxt, "googlebot")
+	robotsTxt, err = robots.NewRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
 	if err != nil {
 		return
 	}
@@ -243,7 +254,7 @@ func (crawler *builtInCrawler) buildRequestToGet(ctx context.Context, url *www.S
 
 	req = req.WithContext(ctx)
 	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("User-Agent", crawler.ua)
+	req.Header.Set("User-Agent", crawler.headerUA)
 
 	crawler.httpClient.CheckRedirect = redirectPolicy
 	resp, err := crawler.httpClient.Do(req)

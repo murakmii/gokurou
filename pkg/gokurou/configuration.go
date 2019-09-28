@@ -14,51 +14,48 @@ type (
 )
 
 type Configuration struct {
-	Workers                  uint16
-	Machines                 uint8
-	UserAgent                string
-	UserAgentOnRobotsTxt     string
+	Workers  uint
+	Machines uint
+
 	ArtifactGathererProvider ArtifactGathererProviderFunc
-	NewURLFrontier           URLFrontierProviderFunc
-	NewCrawler               CrawlerProviderFunc
+	URLFrontierProvider      URLFrontierProviderFunc
+	CrawlerProvider          CrawlerProviderFunc
 	CoordinatorProvider      CoordinatorProviderFunc
-	Advanced                 map[string]interface{}
+
+	Options map[string]interface{}
 }
 
-func NewConfiguration(workers uint16) *Configuration {
+func NewConfiguration(workers, machines uint) *Configuration {
 	return &Configuration{
 		Workers:  workers,
-		Advanced: make(map[string]interface{}),
+		Machines: machines,
+		Options:  make(map[string]interface{}),
 	}
 }
 
-func (c *Configuration) TotalWorkers() uint16 {
-	return c.Workers * uint16(c.Machines)
+func (c *Configuration) TotalWorkers() uint {
+	return c.Workers * c.Machines
 }
 
-func (c *Configuration) FetchAdvancedAsString(key string) (string, error) {
-	value, ok := c.Advanced[key]
+func (c *Configuration) OptionAsString(key string) *string {
+	option, exists := c.Options[key]
+	if !exists {
+		return nil
+	}
+
+	str, ok := option.(string)
 	if !ok {
-		return "", xerrors.Errorf("configuration key '%s' not found", key)
+		return nil
 	}
 
-	asStr, ok := value.(string)
-	if !ok {
-		return "", xerrors.Errorf("configuration key '%s' has not value as string", key)
-	}
-
-	if len(asStr) == 0 {
-		return "", xerrors.Errorf("configuration key '%s' not found", key)
-	}
-
-	return asStr, nil
+	return &str
 }
 
-func (c *Configuration) MustFetchAdvancedAsString(key string) string {
-	str, err := c.FetchAdvancedAsString(key)
-	if err != nil {
-		panic(err)
+func (c *Configuration) MustOptionAsString(key string) string {
+	str := c.OptionAsString(key)
+	if str == nil {
+		panic(xerrors.Errorf("required option: '%s' was NOT set", key))
 	}
 
-	return str
+	return *str
 }

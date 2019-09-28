@@ -121,12 +121,12 @@ func (c *mockCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out Outp
 func (c *mockCrawler) Finish() error { return nil }
 
 func buildConfiguration() *Configuration {
-	conf := NewConfiguration(1)
+	conf := NewConfiguration(1, 1)
 	conf.Machines = 1
 	conf.ArtifactGathererProvider = buildMockArtifactGatherer
-	conf.NewURLFrontier = buildMockURLFrontier
+	conf.URLFrontierProvider = buildMockURLFrontier
 	conf.CoordinatorProvider = buildMockTokenizer
-	conf.NewCrawler = buildMockCrawler
+	conf.CrawlerProvider = buildMockCrawler
 	return conf
 }
 
