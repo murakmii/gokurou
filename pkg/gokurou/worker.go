@@ -36,6 +36,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		ctx, cancel := WorkerContext(ctx, gwn)
 		logger = LoggerFromContext(ctx)
+		logger.Info("started worker")
 
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
