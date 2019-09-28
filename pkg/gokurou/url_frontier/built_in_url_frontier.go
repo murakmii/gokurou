@@ -19,7 +19,7 @@ const (
 	localDBPathProviderConfName = "URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"
 )
 
-type defaultURLFrontier struct {
+type builtInURLFrontier struct {
 	sharedDB     *sql.DB
 	totalWorkers uint32
 	pushBuffer   map[uint32][]string
@@ -30,7 +30,7 @@ type defaultURLFrontier struct {
 	popBuffer []string
 }
 
-func NewDefaultURLFrontier(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
+func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
 	var err error
 
 	sharedDB, err := sql.Open("mysql", conf.MustFetchAdvancedAsString(sharedDBSourceConfName))
@@ -67,7 +67,7 @@ func NewDefaultURLFrontier(ctx context.Context, conf *gokurou.Configuration) (go
 		return nil, err
 	}
 
-	return &defaultURLFrontier{
+	return &builtInURLFrontier{
 		sharedDB:     sharedDB,
 		totalWorkers: uint32(conf.TotalWorkers()),
 		pushBuffer:   make(map[uint32][]string),
@@ -78,7 +78,7 @@ func NewDefaultURLFrontier(ctx context.Context, conf *gokurou.Configuration) (go
 	}, nil
 }
 
-func (frontier *defaultURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
+func (frontier *builtInURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
 	hash, err := url.HashNumber()
 	if err != nil {
 		return err
@@ -112,7 +112,7 @@ func (frontier *defaultURLFrontier) Push(ctx context.Context, url *www.Sanitized
 	return nil
 }
 
-func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
+func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	for {
 		if len(frontier.popBuffer) == 0 {
 			var id int64
@@ -159,7 +159,7 @@ func (frontier *defaultURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 	}
 }
 
-func (frontier *defaultURLFrontier) Finish() error {
+func (frontier *builtInURLFrontier) Finish() error {
 	sharedDBErr := frontier.sharedDB.Close()
 	localDBErr := frontier.localDB.Close()
 

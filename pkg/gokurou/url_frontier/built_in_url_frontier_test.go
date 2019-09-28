@@ -17,19 +17,19 @@ func buildContext() context.Context {
 	return gokurou.ContextWithGWN(context.Background(), uint16(1))
 }
 
-func buildURLFrontier(ctx context.Context) *defaultURLFrontier {
+func buildURLFrontier(ctx context.Context) *builtInURLFrontier {
 	conf := gokurou.NewConfiguration(10)
 	conf.Workers = 1
 	conf.Machines = 1
 	conf.Advanced["URL_FRONTIER_SHARED_DB_SOURCE"] = "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_test?charset=utf8mb4,utf&interpolateParams=true"
 	conf.Advanced["URL_FRONTIER_LOCAL_DB_PATH_PROVIDER"] = func(_ uint16) string { return ":memory:" }
 
-	f, err := NewDefaultURLFrontier(ctx, conf)
+	f, err := BuiltInURLFrontierProvider(ctx, conf)
 	if err != nil {
 		panic(err)
 	}
 
-	frontier := f.(*defaultURLFrontier)
+	frontier := f.(*builtInURLFrontier)
 	if _, err = frontier.sharedDB.Exec("TRUNCATE urls"); err != nil {
 		panic(err)
 	}
