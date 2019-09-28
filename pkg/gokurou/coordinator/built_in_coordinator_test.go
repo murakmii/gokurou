@@ -1,4 +1,4 @@
-package synchronizer
+package coordinator
 
 import (
 	"net"
@@ -7,7 +7,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
-func buildDefaultSynchronizer() *defaultSynchronizer {
+func NewBuiltInCoordinator() *builtInCoordinator {
 	conn, err := redis.DialURL("redis://localhost:11111/2")
 	if err != nil {
 		panic(err)
@@ -18,7 +18,7 @@ func buildDefaultSynchronizer() *defaultSynchronizer {
 		panic(err)
 	}
 
-	return &defaultSynchronizer{
+	return &builtInCoordinator{
 		conn:         conn,
 		nameResolver: mockNameResolver,
 	}
@@ -31,11 +31,11 @@ func mockNameResolver(_ string) ([]net.IP, error) {
 	}, nil
 }
 
-func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
+func TestBuiltInCoordinator_AllocNextGWN(t *testing.T) {
 	t.Run("まだWorkerが登録されていない場合、1を返す", func(t *testing.T) {
-		syncer := buildDefaultSynchronizer()
+		coordinator := NewBuiltInCoordinator()
 
-		gwn, err := syncer.AllocNextGWN()
+		gwn, err := coordinator.AllocNextGWN()
 		if err != nil {
 			t.Errorf("AllocNextGWN() = %v", err)
 		}
@@ -46,13 +46,13 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 	})
 
 	t.Run("Workerがいくつか登録されている場合、次の番号を返す", func(t *testing.T) {
-		syncer := buildDefaultSynchronizer()
-		_, err := syncer.conn.Do("SET", "gokurou_workers", 3)
+		coordinator := NewBuiltInCoordinator()
+		_, err := coordinator.conn.Do("SET", "gokurou_workers", 3)
 		if err != nil {
 			panic(err)
 		}
 
-		gwn, err := syncer.AllocNextGWN()
+		gwn, err := coordinator.AllocNextGWN()
 		if err != nil {
 			t.Errorf("AllocNextGWN() = %v", err)
 		}
@@ -63,11 +63,11 @@ func TestDefaultSynchronizer_GetNextGlobalWorkerNumber(t *testing.T) {
 	})
 }
 
-func TestDefaultSynchronizer_LockByIPAddrOf(t *testing.T) {
+func TestBuiltInCoordinator_LockByIPAddrOf(t *testing.T) {
 	t.Run("ロックを獲得できる場合、trueを返す", func(t *testing.T) {
-		syncer := buildDefaultSynchronizer()
+		coordinator := NewBuiltInCoordinator()
 
-		locked, err := syncer.LockByIPAddrOf("example.com")
+		locked, err := coordinator.LockByIPAddrOf("example.com")
 		if err != nil {
 			t.Errorf("LockByIPAddrOf() = %v", err)
 		}
@@ -76,22 +76,22 @@ func TestDefaultSynchronizer_LockByIPAddrOf(t *testing.T) {
 			t.Errorf("LockByIPAddrOf() = %v, want = true", locked)
 		}
 
-		ttl, _ := redis.Uint64(syncer.conn.Do("TTL", "l-192.168.0.1"))
+		ttl, _ := redis.Uint64(coordinator.conn.Do("TTL", "l-192.168.0.1"))
 		if ttl < 55 {
 			t.Errorf("LockByIPAddrOf() is NOT set TTL for 192.168.0.1")
 		}
 
-		ttl, _ = redis.Uint64(syncer.conn.Do("TTL", "l-192.168.0.2"))
+		ttl, _ = redis.Uint64(coordinator.conn.Do("TTL", "l-192.168.0.2"))
 		if ttl < 55 {
 			t.Errorf("LockByIPAddrOf() is NOT set TTL for 192.168.0.2")
 		}
 	})
 
 	t.Run("ロックを獲得できない場合、falseを返す", func(t *testing.T) {
-		syncer := buildDefaultSynchronizer()
-		_, _ = syncer.conn.Do("SETEX", "l-192.168.0.1", 10, 1)
+		coordinator := NewBuiltInCoordinator()
+		_, _ = coordinator.conn.Do("SETEX", "l-192.168.0.1", 10, 1)
 
-		locked, err := syncer.LockByIPAddrOf("example.com")
+		locked, err := coordinator.LockByIPAddrOf("example.com")
 		if err != nil {
 			t.Errorf("LockByIPAddrOf() = %v", err)
 		}
@@ -100,15 +100,15 @@ func TestDefaultSynchronizer_LockByIPAddrOf(t *testing.T) {
 			t.Errorf("LockByIPAddrOf() = %v, want = false", locked)
 		}
 
-		ttl, _ := redis.Uint64(syncer.conn.Do("TTL", "l-192.168.0.1"))
+		ttl, _ := redis.Uint64(coordinator.conn.Do("TTL", "l-192.168.0.1"))
 		if ttl > 55 {
 			t.Errorf("LockByIPAddrOf() overrides TTL for 192.168.0.1")
 		}
 	})
 }
 
-func TestDefaultSynchronizer_Finish(t *testing.T) {
-	err := buildDefaultSynchronizer().Finish()
+func TestBuiltInCoordinator_Finish(t *testing.T) {
+	err := NewBuiltInCoordinator().Finish()
 	if err != nil {
 		t.Errorf("Finish() = %v", err)
 	}

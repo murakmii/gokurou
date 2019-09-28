@@ -6,6 +6,10 @@ import (
 	"golang.org/x/xerrors"
 )
 
+type (
+	CoordinatorProviderFunc func(conf *Configuration) (Coordinator, error)
+)
+
 type Configuration struct {
 	Workers              uint16
 	Machines             uint8
@@ -14,7 +18,7 @@ type Configuration struct {
 	NewArtifactCollector func(ctx context.Context, conf *Configuration) (ArtifactCollector, error)
 	NewURLFrontier       func(ctx context.Context, conf *Configuration) (URLFrontier, error)
 	NewCrawler           func(ctx context.Context, conf *Configuration) (Crawler, error)
-	NewSynchronizer      func(conf *Configuration) (Synchronizer, error)
+	CoordinatorProvider  CoordinatorProviderFunc
 	Advanced             map[string]interface{}
 }
 

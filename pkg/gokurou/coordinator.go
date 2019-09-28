@@ -1,6 +1,6 @@
 package gokurou
 
-type Synchronizer interface {
+type Coordinator interface {
 	ResourceOwner
 
 	AllocNextGWN() (uint16, error)

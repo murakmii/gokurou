@@ -19,7 +19,7 @@ var globalArtifact []string
 // Syncronizerのモック。".org"なURLはロックを獲れないことにする
 type mockSyncronizer struct{}
 
-func buildMockSynchronizer(_ *Configuration) (Synchronizer, error) {
+func buildMockSynchronizer(_ *Configuration) (Coordinator, error) {
 	return &mockSyncronizer{}, nil
 }
 
@@ -125,7 +125,7 @@ func buildConfiguration() *Configuration {
 	conf.Machines = 1
 	conf.NewArtifactCollector = buildMockArtifactCollector
 	conf.NewURLFrontier = buildMockURLFrontier
-	conf.NewSynchronizer = buildMockSynchronizer
+	conf.CoordinatorProvider = buildMockSynchronizer
 	conf.NewCrawler = buildMockCrawler
 	return conf
 }

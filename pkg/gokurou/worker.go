@@ -22,13 +22,13 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 
 		logger := LoggerFromContext(ctx)
 
-		syncer, err := conf.NewSynchronizer(conf)
+		coordinator, err := conf.CoordinatorProvider(conf)
 		if err != nil {
-			logger.Errorf("failed to initialize synchronizer: %v", err)
+			logger.Errorf("failed to initialize coordinator: %v", err)
 			return
 		}
 
-		gwn, err := syncer.AllocNextGWN()
+		gwn, err := coordinator.AllocNextGWN()
 		if err != nil {
 			logger.Errorf("failed to allocate global worker number: %v", err)
 			return
@@ -40,7 +40,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 		resultCh := make(chan error, 3)
 		results := make([]error, 0, 3)
 
-		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, syncer, resultCh)
+		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator, resultCh)
 		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
 		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
 
@@ -58,7 +58,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
-		resOwners := []ResourceOwner{crawler, frontier, artifactCollector, syncer}
+		resOwners := []ResourceOwner{crawler, frontier, artifactCollector, coordinator}
 		for _, resOwner := range resOwners {
 			if resOwner == nil {
 				continue
@@ -100,7 +100,7 @@ func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration
 	return ac, inputCh
 }
 
-func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, syncer Synchronizer, resultCh chan<- error) (URLFrontier, <-chan *www.SanitizedURL, chan<- *www.SanitizedURL) {
+func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coordinator Coordinator, resultCh chan<- error) (URLFrontier, <-chan *www.SanitizedURL, chan<- *www.SanitizedURL) {
 	ctx = ComponentContext(ctx, "url-frontier")
 	popCh := make(chan *www.SanitizedURL, 5)
 	pushCh := make(chan *www.SanitizedURL, 10)
@@ -135,7 +135,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, sync
 						return
 					}
 				} else {
-					locked, err := syncer.LockByIPAddrOf(url.Host())
+					locked, err := coordinator.LockByIPAddrOf(url.Host())
 					if err != nil {
 						childErrCh <- err
 						return
