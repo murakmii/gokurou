@@ -114,6 +114,7 @@ func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (g
 				MaxIdleConns:        1,
 				MaxIdleConnsPerHost: 1,
 				MaxConnsPerHost:     1,
+				DisableCompression:  false,
 			},
 			CheckRedirect: nil,
 			Timeout:       5 * time.Second,
@@ -123,6 +124,9 @@ func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (g
 
 func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out gokurou.OutputPipeline) error {
 	logger := gokurou.LoggerFromContext(ctx)
+	defer func() {
+		logger.Debug("finished")
+	}()
 
 	robotsTxt := crawler.requestToGetRobotsTxtOf(ctx, url)
 	if !robotsTxt.Allows(url.Path()) {
@@ -177,10 +181,9 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 
 	if page.NoIndex() {
 		baseArtifact = nil
-		return nil
+	} else {
+		baseArtifact.Title = page.Title()
 	}
-
-	baseArtifact.Title = page.Title()
 
 	// どうせ1ホストあたり1回しかクロールしないので、この時点で1ホスト1URLになるようにフィルタしてから結果を送信する
 	urlPerHost := make(map[string]*www.SanitizedURL)
@@ -253,7 +256,6 @@ func (crawler *builtInCrawler) buildRequestToGet(ctx context.Context, url *www.S
 	}
 
 	req = req.WithContext(ctx)
-	req.Header.Set("Accept-Encoding", "gzip")
 	req.Header.Set("User-Agent", crawler.headerUA)
 
 	crawler.httpClient.CheckRedirect = redirectPolicy
