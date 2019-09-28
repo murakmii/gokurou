@@ -19,7 +19,7 @@ import (
 	"github.com/murakmii/gokurou/pkg/gokurou/robots"
 )
 
-type defaultCrawler struct {
+type builtInCrawler struct {
 	ua               string
 	uaOnRobotsTxt    string
 	defaultRobotsTxt *robots.Txt
@@ -88,13 +88,13 @@ var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
 }
 
 // Crawlerを生成して返す
-func NewDefaultCrawler(ctx context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
+func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
 	defaultRobotsTxt, err := robots.NewRobotsTxt(bytes.NewBuffer(nil), conf.UserAgentOnRobotsTxt, "googlebot")
 	if err != nil {
 		return nil, xerrors.Errorf("failed to build default robots.txt: %w", err)
 	}
 
-	return &defaultCrawler{
+	return &builtInCrawler{
 		ua:               conf.UserAgent,
 		uaOnRobotsTxt:    conf.UserAgentOnRobotsTxt,
 		defaultRobotsTxt: defaultRobotsTxt,
@@ -110,7 +110,7 @@ func NewDefaultCrawler(ctx context.Context, conf *gokurou.Configuration) (gokuro
 	}, nil
 }
 
-func (crawler *defaultCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out gokurou.OutputPipeline) error {
+func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out gokurou.OutputPipeline) error {
 	logger := gokurou.LoggerFromContext(ctx)
 
 	robotsTxt := crawler.requestToGetRobotsTxtOf(ctx, url)
@@ -191,14 +191,14 @@ func (crawler *defaultCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	return nil
 }
 
-func (crawler *defaultCrawler) Finish() error {
+func (crawler *builtInCrawler) Finish() error {
 	crawler.httpClient.CloseIdleConnections()
 	return nil
 }
 
 // robots.txtを取得する
 // このメソッドはエラーを返さず、意図したrobots.txtが取得できないならデフォルトのそれを返す
-func (crawler *defaultCrawler) requestToGetRobotsTxtOf(ctx context.Context, url *www.SanitizedURL) (robotsTxt *robots.Txt) {
+func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url *www.SanitizedURL) (robotsTxt *robots.Txt) {
 	robotsTxt = crawler.defaultRobotsTxt
 
 	resp, err := crawler.buildRequestToGet(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
@@ -233,7 +233,7 @@ func (crawler *defaultCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 	return
 }
 
-func (crawler *defaultCrawler) buildRequestToGet(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
+func (crawler *builtInCrawler) buildRequestToGet(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
 	gokurou.LoggerFromContext(ctx).Debugf("preparing: %s", url)
 
 	req, err := http.NewRequest("GET", url.String(), nil)

@@ -58,7 +58,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
-		resOwners := []ResourceOwner{crawler, frontier, gatherer, coordinator}
+		resOwners := []Finisher{crawler, frontier, gatherer, coordinator}
 		for _, resOwner := range resOwners {
 			if resOwner == nil {
 				continue

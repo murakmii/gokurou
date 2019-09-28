@@ -1,7 +1,7 @@
 package gokurou
 
 type Coordinator interface {
-	ResourceOwner
+	Finisher
 
 	AllocNextGWN() (uint16, error)
 	LockByIPAddrOf(host string) (bool, error)

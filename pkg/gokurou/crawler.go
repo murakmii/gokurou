@@ -7,7 +7,7 @@ import (
 )
 
 type Crawler interface {
-	ResourceOwner
+	Finisher
 
 	Crawl(ctx context.Context, url *www.SanitizedURL, out OutputPipeline) error
 }

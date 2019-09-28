@@ -1,5 +1,5 @@
 package gokurou
 
-type ResourceOwner interface {
+type Finisher interface {
 	Finish() error
 }

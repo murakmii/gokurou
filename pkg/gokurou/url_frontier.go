@@ -7,7 +7,7 @@ import (
 )
 
 type URLFrontier interface {
-	ResourceOwner
+	Finisher
 
 	Push(ctx context.Context, url *www.SanitizedURL) error
 	Pop(ctx context.Context) (*www.SanitizedURL, error)

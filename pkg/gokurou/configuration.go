@@ -9,6 +9,7 @@ import (
 type (
 	ArtifactGathererProviderFunc func(ctx context.Context, conf *Configuration) (ArtifactGatherer, error)
 	URLFrontierProviderFunc      func(ctx context.Context, conf *Configuration) (URLFrontier, error)
+	CrawlerProviderFunc          func(ctx context.Context, conf *Configuration) (Crawler, error)
 	CoordinatorProviderFunc      func(conf *Configuration) (Coordinator, error)
 )
 
@@ -19,7 +20,7 @@ type Configuration struct {
 	UserAgentOnRobotsTxt     string
 	ArtifactGathererProvider ArtifactGathererProviderFunc
 	NewURLFrontier           URLFrontierProviderFunc
-	NewCrawler               func(ctx context.Context, conf *Configuration) (Crawler, error)
+	NewCrawler               CrawlerProviderFunc
 	CoordinatorProvider      CoordinatorProviderFunc
 	Advanced                 map[string]interface{}
 }
