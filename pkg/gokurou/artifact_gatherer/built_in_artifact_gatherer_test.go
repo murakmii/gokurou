@@ -1,4 +1,4 @@
-package artifact_collector
+package artifact_gatherer
 
 import (
 	"bytes"
@@ -18,10 +18,10 @@ func (s *basicMockArtifactStorage) put(_ string, data []byte) error {
 	return nil
 }
 
-func buildDefaultArtifactCollector() (*defaultArtifactCollector, *basicMockArtifactStorage) {
+func buildDefaultArtifactCollector() (*builtInArtifactGatherer, *basicMockArtifactStorage) {
 	storage := newBasicMockArtifactStorage()
 
-	return &defaultArtifactCollector{
+	return &builtInArtifactGatherer{
 		storage:     storage,
 		prefix:      "test",
 		buffer:      bytes.NewBuffer(nil),

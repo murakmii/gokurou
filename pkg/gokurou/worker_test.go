@@ -16,31 +16,31 @@ import (
 
 var globalArtifact []string
 
-// Syncronizerのモック。".org"なURLはロックを獲れないことにする
-type mockSyncronizer struct{}
+// Coordinatorのモック。".org"なURLはロックを獲れないことにする
+type mockCoordinator struct{}
 
-func buildMockSynchronizer(_ *Configuration) (Coordinator, error) {
-	return &mockSyncronizer{}, nil
+func buildMockTokenizer(_ *Configuration) (Coordinator, error) {
+	return &mockCoordinator{}, nil
 }
 
-func (s *mockSyncronizer) AllocNextGWN() (uint16, error) {
+func (s *mockCoordinator) AllocNextGWN() (uint16, error) {
 	return 1, nil
 }
 
-func (s *mockSyncronizer) LockByIPAddrOf(host string) (bool, error) {
+func (s *mockCoordinator) LockByIPAddrOf(host string) (bool, error) {
 	return !strings.HasSuffix(host, ".org"), nil
 }
 
-func (s *mockSyncronizer) Finish() error { return nil }
+func (s *mockCoordinator) Finish() error { return nil }
 
-// ArtifactCollectorのモック。単にglobalArtifactに結果を溜め込む
-type mockArtifactCollector struct{}
+// ArtifactGathererのモック。単にglobalArtifactに結果を溜め込む
+type mockArtifactGatherer struct{}
 
-func buildMockArtifactCollector(_ context.Context, _ *Configuration) (ArtifactCollector, error) {
-	return &mockArtifactCollector{}, nil
+func buildMockArtifactGatherer(_ context.Context, _ *Configuration) (ArtifactGatherer, error) {
+	return &mockArtifactGatherer{}, nil
 }
 
-func (ac *mockArtifactCollector) Collect(artifact interface{}) error {
+func (ag *mockArtifactGatherer) Collect(artifact interface{}) error {
 	s, ok := artifact.(string)
 	if !ok {
 		return xerrors.New("can't convert artifact to string")
@@ -50,7 +50,7 @@ func (ac *mockArtifactCollector) Collect(artifact interface{}) error {
 	return nil
 }
 
-func (ac *mockArtifactCollector) Finish() error { return nil }
+func (ag *mockArtifactGatherer) Finish() error { return nil }
 
 // URLFrontierのモック。queueをURLのキューとしクロール対象の供給と保存を行う
 type mockURLFrontier struct {
@@ -81,7 +81,7 @@ func (f *mockURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	}
 }
 
-func (s *mockURLFrontier) Finish() error { return nil }
+func (f *mockURLFrontier) Finish() error { return nil }
 
 // Crawlerのモック。与えられたURLから次のクロール対象となるURLを生成していく
 type mockCrawler struct{}
@@ -123,9 +123,9 @@ func (c *mockCrawler) Finish() error { return nil }
 func buildConfiguration() *Configuration {
 	conf := NewConfiguration(1)
 	conf.Machines = 1
-	conf.NewArtifactCollector = buildMockArtifactCollector
+	conf.ArtifactGathererProvider = buildMockArtifactGatherer
 	conf.NewURLFrontier = buildMockURLFrontier
-	conf.CoordinatorProvider = buildMockSynchronizer
+	conf.CoordinatorProvider = buildMockTokenizer
 	conf.NewCrawler = buildMockCrawler
 	return conf
 }

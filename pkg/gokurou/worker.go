@@ -41,7 +41,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 		results := make([]error, 0, 3)
 
 		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator, resultCh)
-		artifactCollector, acCh := w.startArtifactCollector(ctx, conf, resultCh)
+		gatherer, acCh := w.startArtifactCollector(ctx, conf, resultCh)
 		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
 
 		for {
@@ -58,7 +58,7 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 			}
 		}
 
-		resOwners := []ResourceOwner{crawler, frontier, artifactCollector, coordinator}
+		resOwners := []ResourceOwner{crawler, frontier, gatherer, coordinator}
 		for _, resOwner := range resOwners {
 			if resOwner == nil {
 				continue
@@ -71,11 +71,11 @@ func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configurat
 	}()
 }
 
-func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactCollector, chan<- interface{}) {
+func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactGatherer, chan<- interface{}) {
 	ctx = ComponentContext(ctx, "artifact-collector")
 	inputCh := make(chan interface{}, 5)
 
-	ac, err := conf.NewArtifactCollector(ctx, conf)
+	ac, err := conf.ArtifactGathererProvider(ctx, conf)
 	if err != nil {
 		resultCh <- err
 		return nil, inputCh

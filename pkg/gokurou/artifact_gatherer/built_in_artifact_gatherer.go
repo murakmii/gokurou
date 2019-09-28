@@ -1,4 +1,4 @@
-package artifact_collector
+package artifact_gatherer
 
 import (
 	"bytes"
@@ -26,9 +26,9 @@ type artifactStorage interface {
 	put(key string, data []byte) error
 }
 
-// デフォルトのArtifactCollector
+// デフォルトのbuiltInArtifactGatherer
 // 受け取ったバイト列を改行区切りでストレージに保存する
-type defaultArtifactCollector struct {
+type builtInArtifactGatherer struct {
 	storage     artifactStorage
 	prefix      string
 	buffer      *bytes.Buffer
@@ -45,14 +45,14 @@ const (
 	bucketConfName    = "ARTIFACT_COLLECTOR_BUCKET"
 )
 
-// 新しいNewDefaultArtifactCollectorを生成する
-func NewDefaultArtifactCollector(_ context.Context, conf *gokurou.Configuration) (gokurou.ArtifactCollector, error) {
+// 新しいArtifactGathererを生成する
+func BuiltInArtifactGathererProvider(_ context.Context, conf *gokurou.Configuration) (gokurou.ArtifactGatherer, error) {
 	store, err := newS3StoreFromConfiguration(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	return &defaultArtifactCollector{
+	return &builtInArtifactGatherer{
 		storage:     store,
 		prefix:      conf.MustFetchAdvancedAsString(keyPrefixConfName),
 		buffer:      bytes.NewBuffer(nil),
@@ -63,61 +63,61 @@ func NewDefaultArtifactCollector(_ context.Context, conf *gokurou.Configuration)
 }
 
 // 結果収集。定期的にストレージにアップロードする
-func (c *defaultArtifactCollector) Collect(artifact interface{}) error {
+func (ag *builtInArtifactGatherer) Collect(artifact interface{}) error {
 	b, ok := artifact.([]byte)
 	if !ok {
 		return xerrors.New("can't cast artifact to []byte")
 	}
 
-	c.buffer.Write(b)
-	c.buffer.WriteByte('\n')
-	c.bufCount++
+	ag.buffer.Write(b)
+	ag.buffer.WriteByte('\n')
+	ag.bufCount++
 
-	if c.bufCount < c.maxBuffered {
+	if ag.bufCount < ag.maxBuffered {
 		return nil
 	}
 
-	return c.upload()
+	return ag.upload()
 }
 
 // 終了時はバッファに残った結果をアップロード
-func (c *defaultArtifactCollector) Finish() error {
-	if c.bufCount == 0 {
+func (ag *builtInArtifactGatherer) Finish() error {
+	if ag.bufCount == 0 {
 		return nil
 	}
 
-	return c.upload()
+	return ag.upload()
 }
 
 // アップロード時のキーを生成する
-func (c *defaultArtifactCollector) buildNewKey() (string, error) {
+func (ag *builtInArtifactGatherer) buildNewKey() (string, error) {
 	u, err := uuid.NewRandom()
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s/%s/%s.log", c.prefix, time.Now().Format("2006-01-02-15-04"), u.String()), nil
+	return fmt.Sprintf("%s/%s/%s.log", ag.prefix, time.Now().Format("2006-01-02-15-04"), u.String()), nil
 }
 
 // ストレージへのアップロード処理
-func (c *defaultArtifactCollector) upload() error {
-	key, err := c.buildNewKey()
+func (ag *builtInArtifactGatherer) upload() error {
+	key, err := ag.buildNewKey()
 	if err != nil {
 		return err
 	}
 
-	if err = c.storage.put(key, c.buffer.Bytes()); err != nil {
-		c.errCount++
-		if c.errCount >= 5 {
+	if err = ag.storage.put(key, ag.buffer.Bytes()); err != nil {
+		ag.errCount++
+		if ag.errCount >= 5 {
 			return xerrors.Errorf("can't upload artifact: %w", err)
 		}
 
 		return nil
 	}
 
-	c.buffer.Reset()
-	c.bufCount = 0
-	c.errCount = 0
+	ag.buffer.Reset()
+	ag.bufCount = 0
+	ag.errCount = 0
 
 	return nil
 }

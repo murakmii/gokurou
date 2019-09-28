@@ -7,19 +7,20 @@ import (
 )
 
 type (
-	CoordinatorProviderFunc func(conf *Configuration) (Coordinator, error)
+	ArtifactGathererProviderFunc func(ctx context.Context, conf *Configuration) (ArtifactGatherer, error)
+	CoordinatorProviderFunc      func(conf *Configuration) (Coordinator, error)
 )
 
 type Configuration struct {
-	Workers              uint16
-	Machines             uint8
-	UserAgent            string
-	UserAgentOnRobotsTxt string
-	NewArtifactCollector func(ctx context.Context, conf *Configuration) (ArtifactCollector, error)
-	NewURLFrontier       func(ctx context.Context, conf *Configuration) (URLFrontier, error)
-	NewCrawler           func(ctx context.Context, conf *Configuration) (Crawler, error)
-	CoordinatorProvider  CoordinatorProviderFunc
-	Advanced             map[string]interface{}
+	Workers                  uint16
+	Machines                 uint8
+	UserAgent                string
+	UserAgentOnRobotsTxt     string
+	ArtifactGathererProvider ArtifactGathererProviderFunc
+	NewURLFrontier           func(ctx context.Context, conf *Configuration) (URLFrontier, error)
+	NewCrawler               func(ctx context.Context, conf *Configuration) (Crawler, error)
+	CoordinatorProvider      CoordinatorProviderFunc
+	Advanced                 map[string]interface{}
 }
 
 func NewConfiguration(workers uint16) *Configuration {
