@@ -136,7 +136,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 
 	resp, err := crawler.buildRequestToGet(ctx, url, pageRedirectPolicy)
 	defer func() {
-		if err != nil {
+		if err != nil && xerrors.Is(err, context.Canceled) {
 			logger.Warnf("failed to crawl: %v", err)
 		}
 	}()
@@ -217,7 +217,7 @@ func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 
 	resp, err := crawler.buildRequestToGet(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
-		if err != nil {
+		if err != nil && xerrors.Is(err, context.Canceled) {
 			gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
 		}
 	}()
