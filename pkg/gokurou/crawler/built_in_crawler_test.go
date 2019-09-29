@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,18 +13,18 @@ import (
 
 type mockPipeline struct {
 	pushed    []*www.SanitizedURL
-	collected [][]byte
+	collected []*artifact
 }
 
 func buildMockPipeline() *mockPipeline {
 	return &mockPipeline{
 		pushed:    make([]*www.SanitizedURL, 0),
-		collected: make([][]byte, 0),
+		collected: make([]*artifact, 0),
 	}
 }
 
-func (p *mockPipeline) OutputArtifact(ctx context.Context, artifact interface{}) {
-	p.collected = append(p.collected, artifact.([]byte))
+func (p *mockPipeline) OutputArtifact(ctx context.Context, a interface{}) {
+	p.collected = append(p.collected, a.(*artifact))
 }
 
 func (p *mockPipeline) OutputCollectedURL(ctx context.Context, url *www.SanitizedURL) {
@@ -84,11 +83,7 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 			t.Errorf("Crawl() does NOT collect artifact")
 		}
 
-		art := &artifact{}
-		if err := json.Unmarshal(out.collected[0], art); err != nil {
-			t.Errorf("Crawl() collected invalid artifact")
-		}
-
+		art := out.collected[0]
 		if art.URL != url.String() || art.StatusCode != 200 || art.Title != "Hello, crawler" || art.Server != "test-server" {
 			t.Errorf("Crawl() collected invalid artifact")
 		}

@@ -3,6 +3,7 @@ package artifact_gatherer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -65,12 +66,12 @@ func BuiltInArtifactGathererProvider(_ context.Context, conf *gokurou.Configurat
 
 // 結果収集。定期的にストレージにアップロードする
 func (ag *builtInArtifactGatherer) Collect(artifact interface{}) error {
-	b, ok := artifact.([]byte)
-	if !ok {
-		return xerrors.New("can't cast artifact to []byte")
+	marshaled, err := json.Marshal(artifact)
+	if err != nil {
+		return xerrors.Errorf("failed to marshal artifact: %w", err)
 	}
 
-	ag.buffer.Write(b)
+	ag.buffer.Write(marshaled)
 	ag.buffer.WriteByte('\n')
 	ag.bufCount++
 

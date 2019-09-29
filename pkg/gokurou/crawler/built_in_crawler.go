@@ -3,7 +3,6 @@ package crawler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"time"
@@ -156,12 +155,8 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	}
 
 	defer func() {
-		// 成果物があるならクロール終了時に保存する
 		if baseArtifact != nil {
-			j, err := json.Marshal(baseArtifact)
-			if err == nil {
-				out.OutputArtifact(ctx, j)
-			}
+			out.OutputArtifact(ctx, baseArtifact) // 成果物があるならクロール終了時に保存する
 		}
 	}()
 

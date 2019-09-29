@@ -9,6 +9,10 @@ type basicMockArtifactStorage struct {
 	putted [][]byte
 }
 
+type testArtifact struct {
+	Number int `json:"number"`
+}
+
 func newBasicMockArtifactStorage() *basicMockArtifactStorage {
 	return &basicMockArtifactStorage{putted: make([][]byte, 0)}
 }
@@ -34,14 +38,14 @@ func buildDefaultArtifactCollector() (*builtInArtifactGatherer, *basicMockArtifa
 func TestDefaultArtifactCollector_Collect(t *testing.T) {
 	t.Run("収集された結果がバッファ上限内の場合、バッファを続ける", func(t *testing.T) {
 		collector, storage := buildDefaultArtifactCollector()
-		_ = collector.Collect([]byte("abc"))
+		_ = collector.Collect(testArtifact{Number: 123})
 
 		if collector.bufCount != 1 {
 			t.Errorf("collector.bufCount = %d, want = 1", collector.bufCount)
 		}
 
-		if bytes.Compare(collector.buffer.Bytes(), []byte("abc\n")) != 0 {
-			t.Errorf("collector.buffer.Bytes() = %v, want = 'abc\\n'", collector.buffer.Bytes())
+		if bytes.Compare(collector.buffer.Bytes(), []byte("{\"number\":123}\n")) != 0 {
+			t.Errorf("collector.buffer.Bytes() = %s, want = '{\"number\":123}\n'", string(collector.buffer.Bytes()))
 		}
 
 		if len(storage.putted) != 0 {
@@ -51,9 +55,9 @@ func TestDefaultArtifactCollector_Collect(t *testing.T) {
 
 	t.Run("収集された結果がバッファ上限に達した場合、結果を保存する", func(t *testing.T) {
 		collector, storage := buildDefaultArtifactCollector()
-		_ = collector.Collect([]byte("abc"))
-		_ = collector.Collect([]byte("def"))
-		_ = collector.Collect([]byte("ghi"))
+		_ = collector.Collect(testArtifact{Number: 111})
+		_ = collector.Collect(testArtifact{Number: 222})
+		_ = collector.Collect(testArtifact{Number: 333})
 
 		if collector.bufCount != 0 {
 			t.Errorf("collector.bufCount = %d, want = 0", collector.bufCount)
@@ -67,22 +71,23 @@ func TestDefaultArtifactCollector_Collect(t *testing.T) {
 			t.Errorf("len(storage.putted) = %d, want = 1", len(storage.putted))
 		}
 
-		if bytes.Compare(storage.putted[0], []byte("abc\ndef\nghi\n")) != 0 {
-			t.Errorf("storage.putted[0] = %v, want = 'abc\\ndef\\nghi\\n'", storage.putted[0])
+		want := []byte("{\"number\":111}\n{\"number\":222}\n{\"number\":333}\n")
+		if bytes.Compare(storage.putted[0], want) != 0 {
+			t.Errorf("storage.putted[0] = %v, want = '%s'", storage.putted[0], string(want))
 		}
 	})
 }
 
 func TestDefaultArtifactCollector_Finish(t *testing.T) {
 	collector, storage := buildDefaultArtifactCollector()
-	_ = collector.Collect([]byte("abc"))
+	_ = collector.Collect(testArtifact{Number: 123})
 	_ = collector.Finish()
 
 	if len(storage.putted) != 1 {
 		t.Errorf("len(storage.putted) = %d, want = 1", len(storage.putted))
 	}
 
-	if bytes.Compare(storage.putted[0], []byte("abc\n")) != 0 {
-		t.Errorf("storage.putted[0] = %v, want = 'abc\\n'", storage.putted[0])
+	if bytes.Compare(storage.putted[0], []byte("{\"number\":123}\n")) != 0 {
+		t.Errorf("storage.putted[0] = %v, want = '{\"number\":123}\n'", storage.putted[0])
 	}
 }
