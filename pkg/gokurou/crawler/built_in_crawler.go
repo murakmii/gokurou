@@ -99,7 +99,7 @@ func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (g
 	primaryUA := conf.MustOptionAsString(primaryUAConfKey)
 	secondaryUA := conf.MustOptionAsString(secondaryUAConfKey)
 
-	defaultRobotsTxt, err := robots.NewRobotsTxt(bytes.NewBuffer(nil), primaryUA, secondaryUA)
+	defaultRobotsTxt, err := robots.ParserRobotsTxt(bytes.NewBuffer(nil), primaryUA, secondaryUA)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to build default robots.txt: %w", err)
 	}
@@ -239,7 +239,7 @@ func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 		return
 	}
 
-	robotsTxt, err = robots.NewRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
+	robotsTxt, err = robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
 	if err != nil {
 		return
 	}
