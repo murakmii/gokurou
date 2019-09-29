@@ -56,7 +56,7 @@ type Crawler interface {
 
 // 指定の設定に基づいてクロールを開始する
 func Start(conf *Configuration) {
-	ctx := RootContext()
+	ctx := RootContext(conf)
 	wg := &sync.WaitGroup{}
 
 	for i := uint(0); i < conf.Workers; i++ {

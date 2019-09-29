@@ -136,7 +136,7 @@ func TestWorker_Start(t *testing.T) {
 
 	worker := NewWorker()
 	conf := buildConfiguration()
-	ctx, cancel := context.WithCancel(RootContext())
+	ctx, cancel := context.WithCancel(RootContext(conf))
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 

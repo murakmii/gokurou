@@ -16,10 +16,14 @@ const (
 	loggerContextKey = "GOKUROU_CTX_KEY_LOGGER"
 )
 
-func RootContext() context.Context {
-	// TODO: log level
+func RootContext(conf *Configuration) context.Context {
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	if conf.DebugLevelLogging {
+		logger.SetLevel(logrus.DebugLevel)
+	} else {
+		logger.SetLevel(logrus.InfoLevel)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ctx = ContextWithLogger(ctx, logrus.NewEntry(logger))

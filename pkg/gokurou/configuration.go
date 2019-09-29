@@ -14,8 +14,9 @@ type (
 )
 
 type Configuration struct {
-	Workers  uint
-	Machines uint
+	Workers           uint
+	Machines          uint
+	DebugLevelLogging bool
 
 	ArtifactGathererProvider ArtifactGathererProviderFunc
 	URLFrontierProvider      URLFrontierProviderFunc
