@@ -2,7 +2,6 @@ package www
 
 import (
 	"fmt"
-	"hash/fnv"
 	"net/url"
 	"path"
 	"strings"
@@ -85,16 +84,6 @@ func (sanitized *SanitizedURL) Path() string {
 	return sanitized.url.Path
 }
 
-// ホスト部からSLDとTLDのみで構成されるドメイン名を生成して返す
-func (sanitized *SanitizedURL) SLDAndTLDOfHost() string {
-	labels := strings.Split(sanitized.Host(), ".")
-	if len(labels) > 2 {
-		labels = labels[len(labels)-2:]
-	}
-
-	return strings.Join(labels, ".")
-}
-
 // このURLに対して有効なrobots.txtのURLを返す
 func (sanitized *SanitizedURL) RobotsTxtURL() *SanitizedURL {
 	robotsTxt, _ := url.Parse(sanitized.String())
@@ -105,17 +94,6 @@ func (sanitized *SanitizedURL) RobotsTxtURL() *SanitizedURL {
 // サニタイズ済みURLの文字列表現を返す
 func (sanitized *SanitizedURL) String() string {
 	return sanitized.url.String()
-}
-
-// URLのハッシュ値を返す
-func (sanitized *SanitizedURL) HashNumber() (uint32, error) {
-	hash := fnv.New32a()
-	_, err := hash.Write([]byte(sanitized.SLDAndTLDOfHost()))
-	if err != nil {
-		return 0, err
-	}
-
-	return hash.Sum32(), nil
 }
 
 // このサニタイズ済みURLを元に、相対パスを与えて新しいサニタイズ済みURLを生成する

@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/murakmii/gokurou/pkg/gokurou"
@@ -50,17 +51,17 @@ var robotsTxtRedirectPolicy = func(req *http.Request, via []*http.Request) error
 		return http.ErrUseLastResponse
 	}
 
-	before, err := www.SanitizedURLFromURL(via[len(via)-1].URL)
+	first, err := www.SanitizedURLFromURL(via[0].URL)
 	if err != nil {
 		return http.ErrUseLastResponse
 	}
 
-	next, err := before.Join(req.URL.String())
+	next, err := www.SanitizedURLFromURL(req.URL)
 	if err != nil {
 		return http.ErrUseLastResponse
 	}
 
-	if before.SLDAndTLDOfHost() != next.SLDAndTLDOfHost() {
+	if !strings.HasSuffix(next.Host(), first.Host()) {
 		return http.ErrUseLastResponse
 	}
 
@@ -80,7 +81,7 @@ var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
 
-	next, err := before.Join(req.URL.String())
+	next, err := www.SanitizedURLFromURL(req.URL)
 	if err != nil {
 		return http.ErrUseLastResponse
 	}

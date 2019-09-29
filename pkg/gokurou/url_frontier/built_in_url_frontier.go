@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"strings"
 
 	"github.com/murakmii/gokurou/pkg/gokurou"
@@ -85,12 +86,11 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 }
 
 func (frontier *builtInURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
-	hash, err := url.HashNumber()
+	gwn, err := frontier.computeDestinationGWN(url)
 	if err != nil {
 		return err
 	}
 
-	gwn := uint(uint(hash)%frontier.totalWorkers + 1)
 	if _, ok := frontier.pushBuffer[gwn]; !ok {
 		frontier.pushBuffer[gwn] = make([]string, 0, 51)
 	}
@@ -163,6 +163,23 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 
 		return url, nil
 	}
+}
+
+// URLから、それを処理するべきworkerのGWNを求める
+// ホスト名のSLDとTLDのハッシュ値から計算する
+func (frontier *builtInURLFrontier) computeDestinationGWN(url *www.SanitizedURL) (uint, error) {
+	sldAndTLD := strings.Split(url.Host(), ".")
+	if len(sldAndTLD) > 2 {
+		sldAndTLD = sldAndTLD[len(sldAndTLD)-2:]
+	}
+
+	hash := fnv.New32a()
+	_, err := hash.Write([]byte(strings.Join(sldAndTLD, ".")))
+	if err != nil {
+		return 0, err
+	}
+
+	return (uint(hash.Sum32()) % frontier.totalWorkers) + 1, nil
 }
 
 func (frontier *builtInURLFrontier) Finish() error {
