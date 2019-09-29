@@ -9,7 +9,7 @@
 `docker-compose.yml`でバチっとすれば全部立ち上がる。後は以下のような`main.go`を書いて`go run main.go`する。
 (パスワードやらは全部`docker-compose.yml`に書いているローカル動作確認用のもの)
 
-```
+```go
 package main
 
 import (
