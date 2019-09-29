@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -136,18 +135,9 @@ func TestWorker_Start(t *testing.T) {
 
 	worker := NewWorker()
 	conf := buildConfiguration()
-	ctx, cancel := context.WithCancel(RootContext(conf))
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
+	ctx, _ := context.WithTimeout(RootContext(conf), 3*time.Second)
 
-	worker.Start(ctx, wg, conf)
-
-	go func() {
-		time.Sleep(3 * time.Second)
-		cancel()
-	}()
-
-	wg.Wait()
+	worker.Start(ctx, conf)
 
 	wantArtifacts := []string{"http://1.com", "http://2.com", "http://3.com", "http://4.com", "http://5.com"}
 	if len(globalArtifact) != len(wantArtifacts) {

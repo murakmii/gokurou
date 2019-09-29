@@ -2,7 +2,6 @@ package gokurou
 
 import (
 	"context"
-	"sync"
 	"time"
 
 	"github.com/murakmii/gokurou/pkg/gokurou/www"
@@ -16,60 +15,56 @@ func NewWorker() *Worker {
 	return &Worker{}
 }
 
-func (w *Worker) Start(ctx context.Context, wg *sync.WaitGroup, conf *Configuration) {
-	go func() {
-		defer wg.Done()
+func (w *Worker) Start(ctx context.Context, conf *Configuration) {
+	logger := LoggerFromContext(ctx)
 
-		logger := LoggerFromContext(ctx)
+	coordinator, err := conf.CoordinatorProvider(conf)
+	if err != nil {
+		logger.Errorf("failed to initialize coordinator: %v", err)
+		return
+	}
 
-		coordinator, err := conf.CoordinatorProvider(conf)
-		if err != nil {
-			logger.Errorf("failed to initialize coordinator: %v", err)
-			return
-		}
+	gwn, err := coordinator.AllocNextGWN()
+	if err != nil {
+		logger.Errorf("failed to allocate global worker number: %v", err)
+		return
+	}
 
-		gwn, err := coordinator.AllocNextGWN()
-		if err != nil {
-			logger.Errorf("failed to allocate global worker number: %v", err)
-			return
-		}
+	ctx, cancel := WorkerContext(ctx, gwn)
+	logger = LoggerFromContext(ctx)
+	logger.Info("started worker")
 
-		ctx, cancel := WorkerContext(ctx, gwn)
-		logger = LoggerFromContext(ctx)
-		logger.Info("started worker")
+	resultCh := make(chan error, 3)
+	results := make([]error, 0, 3)
 
-		resultCh := make(chan error, 3)
-		results := make([]error, 0, 3)
+	frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator, resultCh)
+	gatherer, acCh := w.startArtifactCollector(ctx, conf, resultCh)
+	crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
 
-		frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator, resultCh)
-		gatherer, acCh := w.startArtifactCollector(ctx, conf, resultCh)
-		crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
-
-		for {
-			select {
-			case err := <-resultCh:
-				results = append(results, err)
-				if err != nil {
-					cancel()
-				}
-			}
-
-			if len(results) == 3 {
-				break
+	for {
+		select {
+		case err := <-resultCh:
+			results = append(results, err)
+			if err != nil {
+				cancel()
 			}
 		}
 
-		resOwners := []Finisher{crawler, frontier, gatherer, coordinator}
-		for _, resOwner := range resOwners {
-			if resOwner == nil {
-				continue
-			}
-
-			if err := resOwner.Finish(); err != nil {
-				logger.Errorf("failed to finish component: %v", err)
-			}
+		if len(results) == 3 {
+			break
 		}
-	}()
+	}
+
+	resOwners := []Finisher{crawler, frontier, gatherer, coordinator}
+	for _, resOwner := range resOwners {
+		if resOwner == nil {
+			continue
+		}
+
+		if err := resOwner.Finish(); err != nil {
+			logger.Errorf("failed to finish component: %v", err)
+		}
+	}
 }
 
 func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactGatherer, chan<- interface{}) {
