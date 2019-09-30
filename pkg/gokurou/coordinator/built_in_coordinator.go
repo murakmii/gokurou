@@ -42,7 +42,7 @@ func (c *builtInCoordinator) AllocNextGWN() (uint16, error) {
 func (c *builtInCoordinator) LockByIPAddrOf(host string) (bool, error) {
 	ips, err := c.nameResolver(host)
 	if err != nil {
-		return false, err
+		return false, nil // 名前解決に失敗した場合でも、エラーにはせず単にロック不可とするだけ
 	}
 
 	lockKeys := make([]string, len(ips))
