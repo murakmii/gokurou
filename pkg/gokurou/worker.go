@@ -55,6 +55,12 @@ func (w *Worker) Start(ctx context.Context, conf *Configuration) {
 		}
 	}
 
+	for _, result := range results {
+		if result != nil {
+			logger.Errorf("component returned error: %v", result)
+		}
+	}
+
 	resOwners := []Finisher{crawler, frontier, gatherer, coordinator}
 	for _, resOwner := range resOwners {
 		if resOwner == nil {
@@ -134,6 +140,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 					locked, err := coordinator.LockByIPAddrOf(url.Host())
 					if err != nil {
 						childErrCh <- err
+						cancel()
 						return
 					}
 
