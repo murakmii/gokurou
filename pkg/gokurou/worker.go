@@ -9,15 +9,25 @@ import (
 	"github.com/google/uuid"
 )
 
-type Worker struct{}
+type Worker struct {
+	resultCh chan error
+}
+
+const (
+	// ArtifactGatherer, URLFrontier(Pop+Push), Crawlerからの計4つの結果を待つ
+	expectedResults = 4
+)
 
 func NewWorker() *Worker {
 	return &Worker{}
 }
 
+// Workerの処理を開始する。何がしかのエラーが発生するか、ContextがDoneするまで処理をブロックする
 func (w *Worker) Start(ctx context.Context, conf *Configuration) {
+	w.resultCh = make(chan error, expectedResults)
 	logger := LoggerFromContext(ctx)
 
+	// Coordinatorを生成してGWNを得る
 	coordinator, err := conf.CoordinatorProvider(conf)
 	if err != nil {
 		logger.Errorf("failed to initialize coordinator: %v", err)
@@ -32,182 +42,146 @@ func (w *Worker) Start(ctx context.Context, conf *Configuration) {
 
 	ctx, cancel := WorkerContext(ctx, gwn)
 	logger = LoggerFromContext(ctx)
-	logger.Info("started worker")
+	logger.Info("worker is started")
 
-	resultCh := make(chan error, 3)
-	results := make([]error, 0, 3)
+	// 各種SubSystemを生成し、全ての結果がChannelに書き込まれるまでブロックする
+	frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator)
+	gatherer, acCh := w.startArtifactGatherer(ctx, conf)
+	crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh))
 
-	frontier, popCh, pushCh := w.startURLFrontier(ctx, conf, coordinator, resultCh)
-	gatherer, acCh := w.startArtifactCollector(ctx, conf, resultCh)
-	crawler := w.startCrawler(ctx, conf, popCh, NewOutputPipeline(acCh, pushCh), resultCh)
-
-	for {
-		select {
-		case err := <-resultCh:
-			results = append(results, err)
-			if err != nil {
-				cancel()
-			}
-		}
-
-		if len(results) == 3 {
-			break
+	for received := 0; received < expectedResults; received++ {
+		if err := <-w.resultCh; err != nil {
+			logger.Errorf("sub-system returned error: %v", err)
+			cancel()
 		}
 	}
 
-	for _, result := range results {
-		if result != nil {
-			logger.Errorf("component returned error: %v", result)
-		}
-	}
-
-	resOwners := []Finisher{crawler, frontier, gatherer, coordinator}
-	for _, resOwner := range resOwners {
-		if resOwner == nil {
+	// 各種SubSystemを終了してWorker全体も終了
+	finishers := []Finisher{crawler, frontier, gatherer, coordinator}
+	for _, finisher := range finishers {
+		if finisher == nil {
 			continue
 		}
 
-		if err := resOwner.Finish(); err != nil {
-			logger.Errorf("failed to finish component: %v", err)
+		if err := finisher.Finish(); err != nil {
+			logger.Errorf("failed to finish sub-system: %v", err)
 		}
 	}
+
+	logger.Info("worker is finished")
 }
 
-func (w *Worker) startArtifactCollector(ctx context.Context, conf *Configuration, resultCh chan<- error) (ArtifactGatherer, chan<- interface{}) {
-	ctx = ComponentContext(ctx, "artifact-collector")
+// ArtifactGatherer用goroutineを起動する
+func (w *Worker) startArtifactGatherer(ctx context.Context, conf *Configuration) (ArtifactGatherer, chan<- interface{}) {
+	ctx = SubSystemContext(ctx, "artifact-gatherer")
 	inputCh := make(chan interface{}, 5)
 
-	ac, err := conf.ArtifactGathererProvider(ctx, conf)
+	ag, err := conf.ArtifactGathererProvider(ctx, conf)
 	if err != nil {
-		resultCh <- err
+		w.resultCh <- err
 		return nil, inputCh
 	}
 
+	// Channel越しに与えられた結果をCollectし続けるだけ
 	go func() {
 		for {
 			select {
 			case artifact := <-inputCh:
-				if err := ac.Collect(artifact); err != nil {
-					resultCh <- err
+				if err := ag.Collect(artifact); err != nil {
+					w.resultCh <- err
 					return
 				}
 
 			case <-ctx.Done():
-				resultCh <- nil
+				w.resultCh <- nil
 				return
 			}
 		}
 	}()
 
-	return ac, inputCh
+	return ag, inputCh
 }
 
-func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coordinator Coordinator, resultCh chan<- error) (URLFrontier, <-chan *www.SanitizedURL, chan<- *www.SanitizedURL) {
-	ctx = ComponentContext(ctx, "url-frontier")
+// URLFrontire用goroutineを起動する
+func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coordinator Coordinator) (URLFrontier, <-chan *www.SanitizedURL, chan<- *www.SanitizedURL) {
+	ctx = SubSystemContext(ctx, "url-frontier")
 	popCh := make(chan *www.SanitizedURL, 5)
 	pushCh := make(chan *www.SanitizedURL, 10)
 
 	urlFrontier, err := conf.URLFrontierProvider(ctx, conf)
 	if err != nil {
-		resultCh <- err
+		w.resultCh <- err
 		return nil, popCh, pushCh
 	}
 
+	// URLFrontierのPopを回し続けるgoroutineを立ち上げる
 	go func() {
-		ctx, cancel := context.WithCancel(ctx)
-		childErrCh := make(chan error)
-		results := make([]error, 0, 2)
-
-		// Pop loop
-		go func() {
-			for {
-				url, err := urlFrontier.Pop(ctx)
-				if err != nil {
-					childErrCh <- err
-					cancel()
-					return
-				}
-
-				if url == nil {
-					select {
-					case <-time.After(100 * time.Millisecond):
-						// nop
-					case <-ctx.Done():
-						childErrCh <- nil
-						return
-					}
-				} else {
-					locked, err := coordinator.LockByIPAddrOf(url.Host())
-					if err != nil {
-						childErrCh <- err
-						cancel()
-						return
-					}
-
-					if !locked {
-						continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
-					}
-
-					select {
-					case popCh <- url:
-						// nop
-					case <-ctx.Done():
-						childErrCh <- nil
-						return
-					}
-				}
-			}
-		}()
-
-		// Push loop
-		go func() {
-			for {
-				select {
-				case url := <-pushCh:
-					if err := urlFrontier.Push(ctx, url); err != nil {
-						childErrCh <- err
-						cancel()
-						return
-					}
-				case <-ctx.Done():
-					childErrCh <- nil
-					return
-				}
-			}
-		}()
-
 		for {
-			select {
-			case pubErr := <-childErrCh:
-				results = append(results, pubErr)
+			url, err := urlFrontier.Pop(ctx)
+			if err != nil {
+				w.resultCh <- err
+				return
 			}
 
-			if len(results) == 2 {
-				break
+			if url == nil {
+				// Pop出来ないならしばらく待つ
+				select {
+				case <-time.After(100 * time.Millisecond):
+				case <-ctx.Done():
+					w.resultCh <- nil
+					return
+				}
+			} else {
+				// Pop出来た場合はIPアドレスレベルでロックできるか確認し、それでも問題なければChannelに書き込む(最終的にCrawlerに渡される)
+				locked, err := coordinator.LockByIPAddrOf(url.Host())
+				if err != nil {
+					w.resultCh <- err
+					return
+				}
+
+				if !locked {
+					continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
+				}
+
+				select {
+				case popCh <- url:
+				case <-ctx.Done():
+					w.resultCh <- nil
+					return
+				}
 			}
 		}
+	}()
 
-		for i := 0; i < len(results); i++ {
-			if results[i] != nil {
-				resultCh <- results[i]
+	// URLFrontierのPushを回し続けるgoroutineを立ち上げる
+	go func() {
+		for {
+			select {
+			case url := <-pushCh:
+				if err := urlFrontier.Push(ctx, url); err != nil {
+					w.resultCh <- err
+					return
+				}
+			case <-ctx.Done():
+				w.resultCh <- nil
 				return
 			}
 		}
-
-		resultCh <- nil
 	}()
 
 	return urlFrontier, popCh, pushCh
 }
 
-func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *www.SanitizedURL, out OutputPipeline, resultCh chan<- error) Crawler {
-	ctx = ComponentContext(ctx, "crawler")
+// Crawler用goroutineを起動する
+func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-chan *www.SanitizedURL, out OutputPipeline) Crawler {
+	ctx = SubSystemContext(ctx, "crawler")
 	crawler, err := conf.CrawlerProvider(ctx, conf)
 	if err != nil {
-		resultCh <- err
+		w.resultCh <- err
 		return nil
 	}
 
+	// URLFrontierがPopしたURLをCrawlし続ける
 	go func() {
 		for {
 			select {
@@ -218,12 +192,12 @@ func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-
 				ctx = ContextWithLogger(ctx, logger.WithField("id", id.String()))
 
 				if err := crawler.Crawl(ctx, url, out); err != nil {
-					resultCh <- err
+					w.resultCh <- err
 					return
 				}
 
 			case <-ctx.Done():
-				resultCh <- nil
+				w.resultCh <- nil
 				return
 			}
 		}

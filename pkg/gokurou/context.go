@@ -48,8 +48,8 @@ func WorkerContext(ctx context.Context, gwn uint16) (context.Context, context.Ca
 	return context.WithCancel(ctx)
 }
 
-func ComponentContext(ctx context.Context, name string) context.Context {
-	return ContextWithLogger(ctx, LoggerFromContext(ctx).WithField("component", name))
+func SubSystemContext(ctx context.Context, name string) context.Context {
+	return ContextWithLogger(ctx, LoggerFromContext(ctx).WithField("subsys", name))
 }
 
 func ContextWithLogger(ctx context.Context, logger *logrus.Entry) context.Context {
