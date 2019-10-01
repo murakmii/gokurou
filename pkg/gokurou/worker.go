@@ -87,7 +87,7 @@ func (w *Worker) startArtifactGatherer(ctx context.Context, conf *Configuration)
 		for {
 			select {
 			case artifact := <-inputCh:
-				if err := ag.Collect(artifact); err != nil {
+				if err := ag.Collect(ctx, artifact); err != nil {
 					w.resultCh <- err
 					return
 				}

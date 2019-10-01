@@ -41,7 +41,7 @@ type ArtifactGatherer interface {
 	Finisher
 
 	// 結果を収集する。引数の解釈は実装依存で良い
-	Collect(artifact interface{}) error
+	Collect(ctx context.Context, artifact interface{}) error
 }
 
 // クロールの実装を要求するinterface

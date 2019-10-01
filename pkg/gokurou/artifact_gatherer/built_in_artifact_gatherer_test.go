@@ -3,91 +3,102 @@ package artifact_gatherer
 import (
 	"bytes"
 	"testing"
+
+	"github.com/murakmii/gokurou/pkg/gokurou"
 )
 
-type basicMockArtifactStorage struct {
-	putted [][]byte
-}
-
-type testArtifact struct {
+type sampleAtrtifact struct {
 	Number int `json:"number"`
 }
 
-func newBasicMockArtifactStorage() *basicMockArtifactStorage {
-	return &basicMockArtifactStorage{putted: make([][]byte, 0)}
+type mockArtifactStorage struct {
+	putted [][]byte
 }
 
-func (s *basicMockArtifactStorage) put(_ string, data []byte) error {
+func (s *mockArtifactStorage) put(_ string, data []byte) error {
 	s.putted = append(s.putted, data)
 	return nil
 }
 
-func buildDefaultArtifactCollector() (*builtInArtifactGatherer, *basicMockArtifactStorage) {
-	storage := newBasicMockArtifactStorage()
-
-	return &builtInArtifactGatherer{
+func buildBuiltInArtifactGatherer(maxBuffered int) (*mockArtifactStorage, *builtInArtifactGatherer) {
+	storage := &mockArtifactStorage{putted: make([][]byte, 0)}
+	return storage, &builtInArtifactGatherer{
 		storage:     storage,
-		prefix:      "test",
+		keyPrefix:   "test",
 		buffer:      bytes.NewBuffer(nil),
-		bufCount:    0,
-		maxBuffered: 3,
-		errCount:    0,
-	}, storage
+		maxBuffered: maxBuffered,
+	}
 }
+func TestBuiltInArtifactGatherer_Collect(t *testing.T) {
+	ctx := gokurou.RootContext(gokurou.NewConfiguration(1, 1))
 
-func TestDefaultArtifactCollector_Collect(t *testing.T) {
-	t.Run("収集された結果がバッファ上限内の場合、バッファを続ける", func(t *testing.T) {
-		collector, storage := buildDefaultArtifactCollector()
-		_ = collector.Collect(testArtifact{Number: 123})
+	t.Run("Marshalできる場合、バッファしてからアップロードする", func(t *testing.T) {
+		storage, ag := buildBuiltInArtifactGatherer(20)
 
-		if collector.bufCount != 1 {
-			t.Errorf("collector.bufCount = %d, want = 1", collector.bufCount)
+		if err := ag.Collect(ctx, sampleAtrtifact{Number: 123}); err != nil {
+			t.Errorf("Collect() = %v", err)
 		}
 
-		if bytes.Compare(collector.buffer.Bytes(), []byte("{\"number\":123}\n")) != 0 {
-			t.Errorf("collector.buffer.Bytes() = %s, want = '{\"number\":123}\n'", string(collector.buffer.Bytes()))
+		if err := ag.Collect(ctx, sampleAtrtifact{Number: 456}); err != nil {
+			t.Errorf("Collect() = %v", err)
+		}
+
+		got := storage.putted
+		want := []byte("{\"number\":123}\n{\"number\":456}\n")
+
+		if len(got) != 1 || bytes.Compare(got[0], want) != 0 {
+			t.Errorf("Collect() uploads %q, want = %q", got, string(want))
+		}
+
+		if ag.buffer.Len() != 0 {
+			t.Errorf("Collect() does NOT clear buffer")
+		}
+	})
+
+	t.Run("Marshalできない場合でもnilを返す", func(t *testing.T) {
+		_, ag := buildBuiltInArtifactGatherer(20)
+		got := ag.Collect(ctx, make(chan struct{}))
+
+		if got != nil {
+			t.Errorf("Collect() = %v, want no error", got)
+		}
+
+		if ag.buffer.Len() != 0 {
+			t.Errorf("Collect() buffers bytes")
+		}
+	})
+}
+
+func TestBuiltInArtifactGatherer_Finish(t *testing.T) {
+	ctx := gokurou.RootContext(gokurou.NewConfiguration(1, 1))
+
+	t.Run("バッファが空の場合、何事もなく終了する", func(t *testing.T) {
+		storage, ag := buildBuiltInArtifactGatherer(20)
+		if err := ag.Finish(); err != nil {
+			t.Errorf("Finsh() = %v", err)
 		}
 
 		if len(storage.putted) != 0 {
-			t.Errorf("len(storage.putted) = %d, want = 0", len(storage.putted))
+			t.Errorf("Finish() uploads %q", storage.putted)
 		}
 	})
 
-	t.Run("収集された結果がバッファ上限に達した場合、結果を保存する", func(t *testing.T) {
-		collector, storage := buildDefaultArtifactCollector()
-		_ = collector.Collect(testArtifact{Number: 111})
-		_ = collector.Collect(testArtifact{Number: 222})
-		_ = collector.Collect(testArtifact{Number: 333})
+	t.Run("バッファ済みのデータが残っている場合、アップロードする", func(t *testing.T) {
+		storage, ag := buildBuiltInArtifactGatherer(20)
 
-		if collector.bufCount != 0 {
-			t.Errorf("collector.bufCount = %d, want = 0", collector.bufCount)
+		if err := ag.Collect(ctx, sampleAtrtifact{Number: 123}); err != nil {
+			t.Errorf("Collect() = %v", err)
 		}
 
-		if bytes.Compare(collector.buffer.Bytes(), []byte("")) != 0 {
-			t.Errorf("collector.buffer.Bytes() = %v, want = ''", collector.buffer.Bytes())
+		if err := ag.Finish(); err != nil {
+			t.Errorf("Finsh() = %v", err)
 		}
 
-		if len(storage.putted) != 1 {
-			t.Errorf("len(storage.putted) = %d, want = 1", len(storage.putted))
-		}
+		got := storage.putted
+		want := []byte("{\"number\":123}\n")
 
-		want := []byte("{\"number\":111}\n{\"number\":222}\n{\"number\":333}\n")
-		if bytes.Compare(storage.putted[0], want) != 0 {
-			t.Errorf("storage.putted[0] = %v, want = '%s'", storage.putted[0], string(want))
+		if len(got) != 1 || bytes.Compare(got[0], want) != 0 {
+			t.Errorf("Finish() uploads %q, want = %s", got, string(want))
 		}
 	})
-}
-
-func TestDefaultArtifactCollector_Finish(t *testing.T) {
-	collector, storage := buildDefaultArtifactCollector()
-	_ = collector.Collect(testArtifact{Number: 123})
-	_ = collector.Finish()
-
-	if len(storage.putted) != 1 {
-		t.Errorf("len(storage.putted) = %d, want = 1", len(storage.putted))
-	}
-
-	if bytes.Compare(storage.putted[0], []byte("{\"number\":123}\n")) != 0 {
-		t.Errorf("storage.putted[0] = %v, want = '{\"number\":123}\n'", storage.putted[0])
-	}
 }

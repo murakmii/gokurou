@@ -31,11 +31,9 @@ type artifactStorage interface {
 // 受け取ったバイト列を改行区切りでストレージに保存する
 type builtInArtifactGatherer struct {
 	storage     artifactStorage
-	prefix      string
+	keyPrefix   string
 	buffer      *bytes.Buffer
-	bufCount    uint8
-	maxBuffered uint8
-	errCount    uint8
+	maxBuffered int
 }
 
 const (
@@ -56,26 +54,24 @@ func BuiltInArtifactGathererProvider(_ context.Context, conf *gokurou.Configurat
 
 	return &builtInArtifactGatherer{
 		storage:     store,
-		prefix:      conf.MustOptionAsString(keyPrefixConfKey),
+		keyPrefix:   conf.MustOptionAsString(keyPrefixConfKey),
 		buffer:      bytes.NewBuffer(nil),
-		bufCount:    0,
-		maxBuffered: 100,
-		errCount:    0,
+		maxBuffered: 100000,
 	}, nil
 }
 
 // 結果収集。定期的にストレージにアップロードする
-func (ag *builtInArtifactGatherer) Collect(artifact interface{}) error {
+func (ag *builtInArtifactGatherer) Collect(ctx context.Context, artifact interface{}) error {
 	marshaled, err := json.Marshal(artifact)
 	if err != nil {
-		return xerrors.Errorf("failed to marshal artifact: %w", err)
+		gokurou.LoggerFromContext(ctx).Warnf("failed to marshal artifact: %v", err)
+		return nil
 	}
 
 	ag.buffer.Write(marshaled)
 	ag.buffer.WriteByte('\n')
-	ag.bufCount++
 
-	if ag.bufCount < ag.maxBuffered {
+	if ag.buffer.Len() < ag.maxBuffered {
 		return nil
 	}
 
@@ -84,7 +80,7 @@ func (ag *builtInArtifactGatherer) Collect(artifact interface{}) error {
 
 // 終了時はバッファに残った結果をアップロード
 func (ag *builtInArtifactGatherer) Finish() error {
-	if ag.bufCount == 0 {
+	if ag.buffer.Len() == 0 {
 		return nil
 	}
 
@@ -98,29 +94,21 @@ func (ag *builtInArtifactGatherer) buildNewKey() (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%s/%s/%s.log", ag.prefix, time.Now().Format("2006-01-02-15-04"), u.String()), nil
+	return fmt.Sprintf("%s/%s/%s.log", ag.keyPrefix, time.Now().Format("2006-01-02-15-04"), u.String()), nil
 }
 
 // ストレージへのアップロード処理
 func (ag *builtInArtifactGatherer) upload() error {
 	key, err := ag.buildNewKey()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to build artifact key: %v", err)
 	}
 
 	if err = ag.storage.put(key, ag.buffer.Bytes()); err != nil {
-		ag.errCount++
-		if ag.errCount >= 5 {
-			return xerrors.Errorf("can't upload artifact: %w", err)
-		}
-
-		return nil
+		return xerrors.Errorf("failed to upload artifact: %v", err)
 	}
 
 	ag.buffer.Reset()
-	ag.bufCount = 0
-	ag.errCount = 0
-
 	return nil
 }
 
@@ -143,7 +131,10 @@ func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, 
 		"",
 	)
 
-	s3config := aws.NewConfig().WithCredentials(cred).WithRegion(conf.MustOptionAsString(awsRegionConfKey))
+	s3config := aws.NewConfig().
+		WithCredentials(cred).
+		WithRegion(conf.MustOptionAsString(awsRegionConfKey)).WithMaxRetries(5)
+
 	endpoint := conf.OptionAsString(awsS3EndpointConfKey)
 	if endpoint != nil {
 		s3config = s3config.WithEndpoint(*endpoint).WithS3ForcePathStyle(true)
