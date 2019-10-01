@@ -12,6 +12,7 @@ const (
 	redisURLConfKey = "built_in.redis_url"
 )
 
+// TODO: Redis関連のエラーは何回かは許容&リトライしたい
 type builtInCoordinator struct {
 	conn         redis.Conn
 	nameResolver func(host string) ([]net.IP, error)
