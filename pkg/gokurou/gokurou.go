@@ -49,7 +49,7 @@ type Crawler interface {
 	Finisher
 
 	// 与えられたURLについてクロールする
-	// このURLで指定される対象と、関連するrobots.txtにはアクセスしないこと
+	// このURLで指定される対象と、関連するrobots.txt以外にはアクセスしないこと
 	// 得られた結果はOutputPipelineを通じて外部に送信する
 	Crawl(ctx context.Context, url *www.SanitizedURL, out OutputPipeline) error
 }

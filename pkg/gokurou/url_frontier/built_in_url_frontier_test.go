@@ -2,9 +2,13 @@ package url_frontier
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
 
 	"github.com/murakmii/gokurou/pkg/gokurou"
 
@@ -14,7 +18,11 @@ import (
 )
 
 func buildContext() context.Context {
-	return gokurou.ContextWithGWN(context.Background(), uint16(1))
+	logger := logrus.New()
+	logger.SetOutput(ioutil.Discard)
+
+	ctx := gokurou.ContextWithLogger(context.Background(), logrus.NewEntry(logger))
+	return gokurou.ContextWithGWN(ctx, uint16(1))
 }
 
 func buildURLFrontier(ctx context.Context) *builtInURLFrontier {
@@ -73,7 +81,7 @@ func TestDefaultURLFrontier_Push(t *testing.T) {
 	})
 
 	t.Run("十分にPushしている場合、バッファしてからPushする", func(t *testing.T) {
-		frontier.pushedCount[1] = 99
+		frontier.pushedCount[1] = 999
 		want := make([]string, 50)
 		for i := 1; i <= 50; i++ {
 			url := buildRandomHostURL()
@@ -98,59 +106,83 @@ func TestDefaultURLFrontier_Push(t *testing.T) {
 }
 
 func TestDefaultURLFrontier_Pop(t *testing.T) {
-	ctx := buildContext()
-	frontier := buildURLFrontier(ctx)
+	tests := []struct {
+		name  string
+		setup func(frontier *builtInURLFrontier)
+		want  []sql.NullString
+	}{
+		{
+			name:  "PopするURLがない場合、nilを返す",
+			setup: func(_ *builtInURLFrontier) {},
+			want:  []sql.NullString{{}},
+		},
+		{
+			name: "PopするURLがある場合、それを返す",
+			setup: func(frontier *builtInURLFrontier) {
+				if _, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES(1, 'http://example.com')"); err != nil {
+					panic(err)
+				}
+			},
+			want: []sql.NullString{{String: "http://example.com", Valid: true}, {}},
+		},
+		{
+			name: "PopしたURLがクロール済みのものだった場合、次のURLを返す",
+			setup: func(frontier *builtInURLFrontier) {
+				if _, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES(1, 'http://example.com')"); err != nil {
+					panic(err)
+				}
+				if _, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES(1, 'http://www.example.com')"); err != nil {
+					panic(err)
+				}
+				if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES('example.com')"); err != nil {
+					panic(err)
+				}
+			},
+			want: []sql.NullString{{String: "http://www.example.com", Valid: true}, {}},
+		},
+		{
+			name: "複数URLをバッファしつつ返す",
+			setup: func(frontier *builtInURLFrontier) {
+				if _, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES(1, 'http://example.com\thttp://www.example.com\thttp://foo.com')"); err != nil {
+					panic(err)
+				}
+			},
+			want: []sql.NullString{
+				{String: "http://example.com", Valid: true},
+				{String: "http://www.example.com", Valid: true},
+				{String: "http://foo.com", Valid: true},
+				{},
+			},
+		},
+	}
 
-	defer frontier.Finish()
+	for _, tt := range tests {
+		ctx := buildContext()
+		frontier := buildURLFrontier(ctx)
 
-	t.Run("PopするURLがない場合、nilを返す", func(t *testing.T) {
-		url, err := frontier.Pop(ctx)
-		if err != nil {
-			t.Errorf("Pop() = %v", err)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setup(frontier)
 
-		if url != nil {
-			t.Errorf("Pop() = %v, want = nil", url)
-		}
-	})
+			for _, want := range tt.want {
+				got, err := frontier.Pop(ctx)
+				if err != nil {
+					t.Errorf("Pop() = %v", err)
+				}
 
-	t.Run("PopするURLがある場合、それを返す", func(t *testing.T) {
-		url := buildRandomHostURL()
-		if err := frontier.Push(ctx, url); err != nil {
-			panic(err)
-		}
-
-		poppedURL, err := frontier.Pop(ctx)
-		if err != nil {
-			t.Errorf("Pop() = %v", err)
-		}
-
-		if poppedURL == nil || poppedURL.String() != url.String() {
-			t.Errorf("Pop() = %s, want = %s", poppedURL, url)
-		}
-	})
-
-	t.Run("PopしたURLがクロール済みのものだった場合、次のURLを返す", func(t *testing.T) {
-		urls := []*www.SanitizedURL{buildRandomHostURL(), buildRandomHostURL()}
-		for _, url := range urls {
-			if err := frontier.Push(ctx, url); err != nil {
-				panic(err)
+				if want.Valid {
+					if got == nil || got.String() != want.String {
+						t.Errorf("Pop() = %s, want = %s", got, want.String)
+					}
+				} else {
+					if got != nil {
+						t.Errorf("Pop() = %s, want = nil", got)
+					}
+				}
 			}
-		}
+		})
 
-		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", urls[0].Host()); err != nil {
-			panic(err)
-		}
-
-		poppedURL, err := frontier.Pop(ctx)
-		if err != nil {
-			t.Errorf("Pop() = %v", err)
-		}
-
-		if poppedURL == nil || poppedURL.String() != urls[1].String() {
-			t.Errorf("Pop() = %s, want = %s", poppedURL, urls[1].String())
-		}
-	})
+		_ = frontier.Finish()
+	}
 }
 
 func TestDefaultURLFrontier_Finish(t *testing.T) {

@@ -7,6 +7,8 @@ import (
 	"hash/fnv"
 	"strings"
 
+	"golang.org/x/xerrors"
+
 	"github.com/murakmii/gokurou/pkg/gokurou"
 
 	"github.com/murakmii/gokurou/pkg/gokurou/www"
@@ -36,7 +38,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 
 	sharedDB, err := sql.Open("mysql", conf.MustOptionAsString(sharedDBSourceConfKey))
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to connect shared db: %v", err)
 	}
 
 	defer func() {
@@ -52,14 +54,14 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	var localDBPath string
 	if localDBPathPtr == nil {
 		localDBPath = ":memory:"
+		gokurou.LoggerFromContext(ctx).Warn("local db setted on memory")
 	} else {
 		localDBPath = fmt.Sprintf(*localDBPathPtr, gokurou.GWNFromContext(ctx))
 	}
 
 	localDB, err := sql.Open("sqlite3", localDBPath)
 	if err != nil {
-		_ = sharedDB.Close()
-		return nil, err
+		return nil, xerrors.Errorf("failed to connect local db: %v", err)
 	}
 
 	defer func() {
@@ -71,7 +73,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	localDB.SetMaxOpenConns(1)
 	localDB.SetMaxIdleConns(1)
 	if _, err = localDB.Exec("CREATE TABLE IF NOT EXISTS crawled_hosts(host TEXT PRIMARY KEY)"); err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to setup local db: %v", err)
 	}
 
 	return &builtInURLFrontier{
@@ -86,33 +88,30 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 }
 
 func (frontier *builtInURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
-	gwn, err := frontier.computeDestinationGWN(url)
-	if err != nil {
-		return err
+	destGWN := frontier.computeDestinationGWN(url)
+
+	if _, ok := frontier.pushBuffer[destGWN]; !ok {
+		frontier.pushBuffer[destGWN] = make([]string, 0, 51)
 	}
 
-	if _, ok := frontier.pushBuffer[gwn]; !ok {
-		frontier.pushBuffer[gwn] = make([]string, 0, 51)
-	}
-
-	frontier.pushBuffer[gwn] = append(frontier.pushBuffer[gwn], url.String())
-	frontier.pushedCount[gwn]++
+	frontier.pushBuffer[destGWN] = append(frontier.pushBuffer[destGWN], url.String())
+	frontier.pushedCount[destGWN]++
 
 	var threshold int
-	if frontier.pushedCount[gwn] < 100 {
+	if frontier.pushedCount[destGWN] < 1000 {
 		threshold = 1
 	} else {
 		threshold = 50
 	}
 
-	if len(frontier.pushBuffer[gwn]) >= threshold {
-		tabJoinedURL := strings.Join(frontier.pushBuffer[gwn], "\t")
-		_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (?, ?)", gwn, tabJoinedURL)
+	if len(frontier.pushBuffer[destGWN]) >= threshold {
+		tabJoinedURL := strings.Join(frontier.pushBuffer[destGWN], "\t")
+		_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (?, ?)", destGWN, tabJoinedURL)
 		if err != nil {
 			return err
 		}
 
-		frontier.pushBuffer[gwn] = make([]string, 0, 51)
+		frontier.pushBuffer[destGWN] = make([]string, 0, 51)
 	}
 
 	return nil
@@ -143,17 +142,12 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 
 		frontier.popBuffer = frontier.popBuffer[1:]
 
-		rows, err := frontier.localDB.Query("SELECT 1 FROM crawled_hosts WHERE host = ?", url.Host())
-		if err != nil {
-			return nil, err
-		}
-
-		needLoop := rows.Next()
-		if err = rows.Close(); err != nil {
-			return nil, err
-		}
-
-		if needLoop {
+		var tmp sql.NullInt64
+		if err = frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", url.Host()).Scan(&tmp); err != nil {
+			if err != sql.ErrNoRows {
+				return nil, err
+			}
+		} else {
 			continue
 		}
 
@@ -167,19 +161,17 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 
 // URLから、それを処理するべきworkerのGWNを求める
 // ホスト名のSLDとTLDのハッシュ値から計算する
-func (frontier *builtInURLFrontier) computeDestinationGWN(url *www.SanitizedURL) (uint, error) {
+func (frontier *builtInURLFrontier) computeDestinationGWN(url *www.SanitizedURL) uint {
 	sldAndTLD := strings.Split(url.Host(), ".")
 	if len(sldAndTLD) > 2 {
 		sldAndTLD = sldAndTLD[len(sldAndTLD)-2:]
 	}
 
+	// hash.Hash32のWriteの実装を読めば分かるが、これは絶対にエラーを返さない
 	hash := fnv.New32a()
-	_, err := hash.Write([]byte(strings.Join(sldAndTLD, ".")))
-	if err != nil {
-		return 0, err
-	}
+	_, _ = hash.Write([]byte(strings.Join(sldAndTLD, ".")))
 
-	return (uint(hash.Sum32()) % frontier.totalWorkers) + 1, nil
+	return (uint(hash.Sum32()) % frontier.totalWorkers) + 1
 }
 
 func (frontier *builtInURLFrontier) Finish() error {
