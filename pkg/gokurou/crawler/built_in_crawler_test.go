@@ -61,7 +61,7 @@ func buildTestServer() *httptest.Server {
 
 func TestDefaultCrawler_Crawl(t *testing.T) {
 	conf := buildConfiguration()
-	ctx := gokurou.RootContext(conf)
+	ctx, _ := gokurou.WorkerContext(gokurou.MustRootContext(conf), 1)
 	crawler, err := BuiltInCrawlerProvider(ctx, conf)
 	if err != nil {
 		panic(err)

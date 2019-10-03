@@ -11,6 +11,7 @@ type (
 	URLFrontierProviderFunc      func(ctx context.Context, conf *Configuration) (URLFrontier, error)
 	CrawlerProviderFunc          func(ctx context.Context, conf *Configuration) (Crawler, error)
 	CoordinatorProviderFunc      func(conf *Configuration) (Coordinator, error)
+	TracerProviderFunc           func(conf *Configuration) (Tracer, error)
 )
 
 type Configuration struct {
@@ -22,6 +23,7 @@ type Configuration struct {
 	URLFrontierProvider      URLFrontierProviderFunc
 	CrawlerProvider          CrawlerProviderFunc
 	CoordinatorProvider      CoordinatorProviderFunc
+	TracerProvider           TracerProviderFunc
 
 	Options map[string]interface{}
 }

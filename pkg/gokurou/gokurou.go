@@ -44,6 +44,21 @@ type ArtifactGatherer interface {
 	Collect(ctx context.Context, artifact interface{}) error
 }
 
+// クロール中の動作状況をトレースするトレーサーの実装を要求するinterface
+type Tracer interface {
+	Finisher
+
+	// 1クロール完了するごとに呼び出される
+	TraceCrawled(ctx context.Context, err error)
+}
+
+// 何もしないデフォルトのトレーサーを実装しておく
+type NullTracer struct{}
+
+func NewNullTracer() Tracer                                      { return NullTracer{} }
+func (t NullTracer) TraceCrawled(ctx context.Context, err error) {}
+func (t NullTracer) Finish() error                               { return nil }
+
 // クロールの実装を要求するinterface
 type Crawler interface {
 	Finisher
@@ -55,8 +70,12 @@ type Crawler interface {
 }
 
 // 指定の設定に基づいてクロールを開始する
-func Start(conf *Configuration) {
-	ctx := RootContext(conf)
+func Start(conf *Configuration) error {
+	ctx, err := RootContext(conf)
+	if err != nil {
+		return err
+	}
+
 	wg := &sync.WaitGroup{}
 
 	for i := uint(0); i < conf.Workers; i++ {
@@ -69,4 +88,5 @@ func Start(conf *Configuration) {
 	}
 
 	wg.Wait()
+	return nil
 }

@@ -135,7 +135,7 @@ func TestWorker_Start(t *testing.T) {
 
 	worker := NewWorker()
 	conf := buildConfiguration()
-	ctx, _ := context.WithTimeout(RootContext(conf), 3*time.Second)
+	ctx, _ := context.WithTimeout(MustRootContext(conf), 3*time.Second)
 
 	worker.Start(ctx, conf)
 

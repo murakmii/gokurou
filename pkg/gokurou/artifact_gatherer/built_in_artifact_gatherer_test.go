@@ -30,7 +30,7 @@ func buildBuiltInArtifactGatherer(maxBuffered int) (*mockArtifactStorage, *built
 	}
 }
 func TestBuiltInArtifactGatherer_Collect(t *testing.T) {
-	ctx := gokurou.RootContext(gokurou.NewConfiguration(1, 1))
+	ctx := gokurou.MustRootContext(gokurou.NewConfiguration(1, 1))
 
 	t.Run("Marshalできる場合、バッファしてからアップロードする", func(t *testing.T) {
 		storage, ag := buildBuiltInArtifactGatherer(20)
@@ -70,7 +70,7 @@ func TestBuiltInArtifactGatherer_Collect(t *testing.T) {
 }
 
 func TestBuiltInArtifactGatherer_Finish(t *testing.T) {
-	ctx := gokurou.RootContext(gokurou.NewConfiguration(1, 1))
+	ctx := gokurou.MustRootContext(gokurou.NewConfiguration(1, 1))
 
 	t.Run("バッファが空の場合、何事もなく終了する", func(t *testing.T) {
 		storage, ag := buildBuiltInArtifactGatherer(20)
