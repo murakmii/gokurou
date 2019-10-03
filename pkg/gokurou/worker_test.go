@@ -39,7 +39,7 @@ func buildMockArtifactGatherer(_ context.Context, _ *Configuration) (ArtifactGat
 	return &mockArtifactGatherer{}, nil
 }
 
-func (ag *mockArtifactGatherer) Collect(artifact interface{}) error {
+func (ag *mockArtifactGatherer) Collect(_ context.Context, artifact interface{}) error {
 	s, ok := artifact.(string)
 	if !ok {
 		return xerrors.New("can't convert artifact to string")

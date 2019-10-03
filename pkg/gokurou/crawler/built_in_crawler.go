@@ -1,7 +1,6 @@
 package crawler
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -44,71 +43,64 @@ type artifact struct {
 	Server     string `json:"server"`
 }
 
-// robots.txtを取得する際のリダイレクトのルール
-// ホスト名ののSDLとTDLが等しい限り、3回までリダイレクトする
-var robotsTxtRedirectPolicy = func(req *http.Request, via []*http.Request) error {
-	if len(via) >= 3 {
-		return http.ErrUseLastResponse
+var (
+	// robots.txtを取得する際のリダイレクトのルール
+	// ホスト名ののSDLとTDLが等しい限り、3回までリダイレクトする
+	robotsTxtRedirectPolicy = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return http.ErrUseLastResponse
+		}
+
+		first, err := www.SanitizedURLFromURL(via[0].URL)
+		if err != nil {
+			return http.ErrUseLastResponse
+		}
+
+		next, err := www.SanitizedURLFromURL(req.URL)
+		if err != nil {
+			return http.ErrUseLastResponse
+		}
+
+		if !strings.HasSuffix(next.Host(), first.Host()) {
+			return http.ErrUseLastResponse
+		}
+
+		gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
+		return nil
 	}
 
-	first, err := www.SanitizedURLFromURL(via[0].URL)
-	if err != nil {
-		return http.ErrUseLastResponse
+	// ページを取得する際のリダイレクトのルール
+	// ホスト名が等しい限り3回までリダイレクトする
+	pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return http.ErrUseLastResponse
+		}
+
+		before, err := www.SanitizedURLFromURL(via[len(via)-1].URL)
+		if err != nil {
+			return http.ErrUseLastResponse
+		}
+
+		next, err := www.SanitizedURLFromURL(req.URL)
+		if err != nil {
+			return http.ErrUseLastResponse
+		}
+
+		if before.Host() != next.Host() {
+			return http.ErrUseLastResponse
+		}
+
+		gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
+		return nil
 	}
-
-	next, err := www.SanitizedURLFromURL(req.URL)
-	if err != nil {
-		return http.ErrUseLastResponse
-	}
-
-	if !strings.HasSuffix(next.Host(), first.Host()) {
-		return http.ErrUseLastResponse
-	}
-
-	gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
-	return nil
-}
-
-// ページを取得する際のリダイレクトのルール
-// ホスト名が等しい限り3回までリダイレクトする
-var pageRedirectPolicy = func(req *http.Request, via []*http.Request) error {
-	if len(via) >= 3 {
-		return http.ErrUseLastResponse
-	}
-
-	before, err := www.SanitizedURLFromURL(via[len(via)-1].URL)
-	if err != nil {
-		return http.ErrUseLastResponse
-	}
-
-	next, err := www.SanitizedURLFromURL(req.URL)
-	if err != nil {
-		return http.ErrUseLastResponse
-	}
-
-	if before.Host() != next.Host() {
-		return http.ErrUseLastResponse
-	}
-
-	gokurou.LoggerFromContext(req.Context()).Debugf("redirecting: %s", req.URL)
-	return nil
-}
+)
 
 // Crawlerを生成して返す
-func BuiltInCrawlerProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
-	primaryUA := conf.MustOptionAsString(primaryUAConfKey)
-	secondaryUA := conf.MustOptionAsString(secondaryUAConfKey)
-
-	defaultRobotsTxt, err := robots.ParserRobotsTxt(bytes.NewBuffer(nil), primaryUA, secondaryUA)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to build default robots.txt: %w", err)
-	}
-
+func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
 	return &builtInCrawler{
-		headerUA:         conf.MustOptionAsString(headerUAConfKey),
-		primaryUA:        primaryUA,
-		secondaryUA:      secondaryUA,
-		defaultRobotsTxt: defaultRobotsTxt,
+		headerUA:    conf.MustOptionAsString(headerUAConfKey),
+		primaryUA:   conf.MustOptionAsString(primaryUAConfKey),
+		secondaryUA: conf.MustOptionAsString(secondaryUAConfKey),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:        1,
@@ -128,13 +120,13 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		logger.Debug("finished")
 	}()
 
-	robotsTxt := crawler.requestToGetRobotsTxtOf(ctx, url)
-	if !robotsTxt.Allows(url.Path()) {
-		logger.Debugf("crawling disallowed by robots.txt: %s", url.String())
+	robotsTxt := crawler.getRobotsTxt(ctx, url)
+	if robotsTxt != nil && !robotsTxt.Allows(url.Path()) {
+		logger.Debugf("crawling disallowed by robots.txt: %s", url)
 		return nil
 	}
 
-	resp, err := crawler.buildRequestToGet(ctx, url, pageRedirectPolicy)
+	resp, err := crawler.request(ctx, url, pageRedirectPolicy)
 	defer func() {
 		if err != nil && xerrors.Is(err, context.Canceled) {
 			logger.Warnf("failed to crawl: %v", err)
@@ -208,10 +200,8 @@ func (crawler *builtInCrawler) Finish() error {
 
 // robots.txtを取得する
 // このメソッドはエラーを返さず、意図したrobots.txtが取得できないならデフォルトのそれを返す
-func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url *www.SanitizedURL) (robotsTxt *robots.Txt) {
-	robotsTxt = crawler.defaultRobotsTxt
-
-	resp, err := crawler.buildRequestToGet(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
+func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) *robots.Txt {
+	resp, err := crawler.request(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
 		if err != nil && xerrors.Is(err, context.Canceled) {
 			gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
@@ -219,7 +209,7 @@ func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 	}()
 
 	if err != nil {
-		return
+		return nil
 	}
 
 	defer func() {
@@ -227,23 +217,23 @@ func (crawler *builtInCrawler) requestToGetRobotsTxtOf(ctx context.Context, url 
 	}()
 
 	if !resp.succeeded() {
-		return
+		return nil
 	}
 
 	reader, err := resp.bodyReader()
 	if err != nil {
-		return
+		return nil
 	}
 
-	robotsTxt, err = robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
+	txt, err := robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
 	if err != nil {
-		return
+		return nil
 	}
 
-	return
+	return txt
 }
 
-func (crawler *builtInCrawler) buildRequestToGet(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
+func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
 	gokurou.LoggerFromContext(ctx).Debugf("preparing: %s", url)
 
 	req, err := http.NewRequest("GET", url.String(), nil)
