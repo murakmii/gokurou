@@ -88,5 +88,5 @@ func Start(conf *Configuration) error {
 	}
 
 	wg.Wait()
-	return nil
+	return TracerFromContext(ctx).Finish()
 }
