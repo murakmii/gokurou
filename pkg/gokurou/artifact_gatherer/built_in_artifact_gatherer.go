@@ -37,12 +37,9 @@ type builtInArtifactGatherer struct {
 }
 
 const (
-	awsRegionConfKey          = "built_in.aws.region"
-	awsAccessKeyIDConfKey     = "built_in.aws.access_key_id"
-	awsSecretAccessKeyConfKey = "built_in.aws.secret_access_key"
-	awsS3EndpointConfKey      = "built_in.aws.s3_endpoint"
-	keyPrefixConfKey          = "built_in.artifact_gatherer.gathered_item_prefix"
-	bucketConfKey             = "built_in.artifact_gatherer.bucket"
+	awsS3EndpointConfKey = "built_in.aws.s3_endpoint"
+	keyPrefixConfKey     = "built_in.artifact_gatherer.gathered_item_prefix"
+	bucketConfKey        = "built_in.artifact_gatherer.bucket"
 )
 
 // 新しいArtifactGathererを生成する
@@ -125,15 +122,10 @@ func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, 
 		return nil, xerrors.Errorf("can't create aws session: %v", err)
 	}
 
-	cred := credentials.NewStaticCredentials(
-		conf.MustOptionAsString(awsAccessKeyIDConfKey),
-		conf.MustOptionAsString(awsSecretAccessKeyConfKey),
-		"",
-	)
-
+	cred := credentials.NewStaticCredentials(conf.AwsAccessKeyID, conf.AwsSecretAccessKey, "")
 	s3config := aws.NewConfig().
 		WithCredentials(cred).
-		WithRegion(conf.MustOptionAsString(awsRegionConfKey)).WithMaxRetries(5)
+		WithRegion(conf.MustOptionAsString(conf.AwsRegion)).WithMaxRetries(5)
 
 	endpoint := conf.OptionAsString(awsS3EndpointConfKey)
 	if endpoint != nil {

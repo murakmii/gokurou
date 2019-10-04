@@ -19,6 +19,10 @@ type Configuration struct {
 	Machines          uint
 	DebugLevelLogging bool
 
+	AwsRegion          string
+	AwsAccessKeyID     string
+	AwsSecretAccessKey string
+
 	ArtifactGathererProvider ArtifactGathererProviderFunc
 	URLFrontierProvider      URLFrontierProviderFunc
 	CrawlerProvider          CrawlerProviderFunc
