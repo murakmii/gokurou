@@ -19,7 +19,12 @@ const (
 
 func RootContext(conf *Configuration) (context.Context, error) {
 	logger := logrus.New()
-	logger.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	if conf.JSONLogging {
+		logger.SetFormatter(&logrus.JSONFormatter{})
+	} else {
+		logger.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+	}
+
 	if conf.DebugLevelLogging {
 		logger.SetLevel(logrus.DebugLevel)
 	} else {

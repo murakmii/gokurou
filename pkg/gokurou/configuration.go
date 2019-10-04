@@ -18,6 +18,7 @@ type Configuration struct {
 	Workers           uint
 	Machines          uint
 	DebugLevelLogging bool
+	JSONLogging       bool
 
 	AwsRegion          string
 	AwsAccessKeyID     string
