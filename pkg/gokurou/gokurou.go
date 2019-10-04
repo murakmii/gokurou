@@ -45,6 +45,7 @@ type ArtifactGatherer interface {
 }
 
 // クロール中の動作状況をトレースするトレーサーの実装を要求するinterface
+// トレーサーはWorker毎ではなく1プロセス中でただ1つのトレーサーを用いてトレースを行うため、 競合状態に注意すること
 type Tracer interface {
 	Finisher
 
