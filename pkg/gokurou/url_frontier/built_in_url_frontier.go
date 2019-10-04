@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
+	"time"
 
 	"golang.org/x/xerrors"
 
@@ -48,7 +49,8 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}()
 
 	sharedDB.SetMaxOpenConns(1)
-	sharedDB.SetMaxIdleConns(1)
+	sharedDB.SetMaxIdleConns(2)
+	sharedDB.SetConnMaxLifetime(10 * time.Second)
 
 	localDBPathPtr := conf.OptionAsString(localDBPathConfKey)
 	var localDBPath string
@@ -72,6 +74,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 
 	localDB.SetMaxOpenConns(1)
 	localDB.SetMaxIdleConns(1)
+	localDB.SetConnMaxLifetime(0)
 	if _, err = localDB.Exec("CREATE TABLE IF NOT EXISTS crawled_hosts(host TEXT PRIMARY KEY)"); err != nil {
 		return nil, xerrors.Errorf("failed to setup local db: %v", err)
 	}
