@@ -6,9 +6,9 @@ import (
 	"io/ioutil"
 	"os"
 
-	"golang.org/x/xerrors"
-
 	"github.com/murakmii/gokurou/pkg/gokurou/tracer"
+
+	"golang.org/x/xerrors"
 
 	"github.com/murakmii/gokurou/pkg/gokurou/artifact_gatherer"
 	"github.com/murakmii/gokurou/pkg/gokurou/coordinator"
@@ -38,6 +38,7 @@ type awsConfig struct {
 	Region          string `json:"region"`
 	AccessKeyID     string `json:"access_key_id"`
 	SecretAccessKey string `json:"secret_access_key"`
+	S3EndPoint      string `json:"s3_endpoint"`
 }
 
 type artifactConfig struct {
@@ -148,12 +149,14 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 	conf.AwsRegion = configContent.Aws.Region
 	conf.AwsAccessKeyID = configContent.Aws.AccessKeyID
 	conf.AwsSecretAccessKey = configContent.Aws.SecretAccessKey
+	if len(configContent.Aws.S3EndPoint) > 0 {
+		conf.AwsS3EndPoint = configContent.Aws.S3EndPoint
+	}
 
 	conf.CoordinatorProvider = coordinator.BuiltInCoordinatorProvider
 	conf.ArtifactGathererProvider = artifact_gatherer.BuiltInArtifactGathererProvider
 	conf.URLFrontierProvider = url_frontier.BuiltInURLFrontierProvider
 	conf.CrawlerProvider = crawler.BuiltInCrawlerProvider
-	conf.TracerProvider = tracer.NewMetricsTracer
 
 	conf.Options["built_in.artifact_gatherer.bucket"] = configContent.Artifact.Bucket
 	conf.Options["built_in.artifact_gatherer.gathered_item_prefix"] = configContent.Artifact.KeyPrefix
@@ -166,6 +169,13 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 
 	conf.Options["built_in.url_frontier.shared_db_source"] = configContent.URLFrontier.SharedDBSource
 	conf.Options["built_in.url_frontier.local_db_path"] = configContent.URLFrontier.LocalDBPath
+
+	if !conf.AwsConfigurationMayBeDummy() {
+		conf.TracerProvider = tracer.NewMetricsTracer
+		conf.Options["built_in.tracer.namespace"] = configContent.Tracer.Namespace
+		conf.Options["built_in.tracer.crawled_count_dimention_name"] = configContent.Tracer.CrawledCountDimName
+		conf.Options["built_in.tracer.crawed_count_dimention_value"] = configContent.Tracer.CrawledCountDimValue
+	}
 
 	return conf, nil
 }

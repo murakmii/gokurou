@@ -128,9 +128,8 @@ func newS3StoreFromConfiguration(conf *gokurou.Configuration) (artifactStorage, 
 		WithRegion(conf.AwsRegion).
 		WithMaxRetries(5)
 
-	endpoint := conf.OptionAsString(awsS3EndpointConfKey)
-	if endpoint != nil {
-		s3config = s3config.WithEndpoint(*endpoint).WithS3ForcePathStyle(true)
+	if len(conf.AwsS3EndPoint) > 0 {
+		s3config = s3config.WithEndpoint(conf.AwsS3EndPoint).WithS3ForcePathStyle(true)
 	}
 
 	return &s3ArtifactStorage{

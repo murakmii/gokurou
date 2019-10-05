@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"golang.org/x/xerrors"
+
 	"github.com/murakmii/gokurou/pkg/gokurou/www"
 )
 
@@ -23,6 +25,9 @@ type Coordinator interface {
 	// 与えられたホスト名を解決して得られるIPアドレスについて、一定時間ロックする。ロックを獲得できた場合にtrueを返すこと
 	// (同様のIPアドレスが得られるホスト名を引数とする他のLockByIPAddrOf呼び出しが、一定時間内はfalseを返すようにすること)
 	LockByIPAddrOf(host string) (bool, error)
+
+	// クロール中に発生したデータをリセットし、次のクロール開始に備える。Finish相当の初期化処理も同時に行うこと
+	Reset() error
 }
 
 // クロール対象となるURLの集合を扱うための実装を要求するinterface
@@ -34,6 +39,9 @@ type URLFrontier interface {
 
 	// URLの集合からURLを1つ取り出す
 	Pop(ctx context.Context) (*www.SanitizedURL, error)
+
+	// クロール中に発生したデータをリセットし、次のクロール開始に備える。Finish相当の初期化処理も同時に行うこと
+	Reset() error
 }
 
 // クロール中に得られた結果の収集処理の実装を要求するinterface
@@ -93,16 +101,29 @@ func Start(conf *Configuration) error {
 }
 
 func Reset(conf *Configuration) error {
-	/*ctx, err := RootContext(conf)
-	if err != nil {
-		return err
-	}
-
 	coordinator, err := conf.CoordinatorProvider(conf)
 	if err != nil {
 		return xerrors.Errorf("failed to setup coordinator: %v", err)
 	}
 
-	*/
+	if err = coordinator.Reset(); err != nil {
+		return xerrors.Errorf("failed to reset by coordinator: %v", err)
+	}
+
+	ctx, err := RootContext(conf)
+	if err != nil {
+		return err
+	}
+
+	ctx, _ = WorkerContext(ctx, 1)
+	frontier, err := conf.URLFrontierProvider(ctx, conf)
+	if err != nil {
+		return xerrors.Errorf("failed to setup url frontier: %v", err)
+	}
+
+	if err = frontier.Reset(); err != nil {
+		return xerrors.Errorf("failed to reset by frontier: %v", err)
+	}
+
 	return nil
 }

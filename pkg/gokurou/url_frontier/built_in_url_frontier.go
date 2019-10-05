@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/fnv"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,9 +31,10 @@ type builtInURLFrontier struct {
 	pushBuffer   map[uint][]string
 	pushedCount  map[uint]uint64
 
-	localDB   *sql.DB
-	nextPopID int64
-	popBuffer []string
+	localDB     *sql.DB
+	localDBPath string
+	nextPopID   int64
+	popBuffer   []string
 }
 
 func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
@@ -85,6 +88,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		pushBuffer:   make(map[uint][]string),
 		pushedCount:  make(map[uint]uint64),
 		localDB:      localDB,
+		localDBPath:  localDBPath,
 		nextPopID:    0,
 		popBuffer:    make([]string, 0),
 	}, nil
@@ -187,6 +191,26 @@ func (frontier *builtInURLFrontier) Finish() error {
 
 	if localDBErr != nil {
 		return localDBErr
+	}
+
+	return nil
+}
+
+func (frontier *builtInURLFrontier) Reset() error {
+	_, err := frontier.sharedDB.Exec("TRUNCATE urls")
+	if err != nil {
+		return err
+	}
+
+	if err = frontier.Finish(); err != nil {
+		return err
+	}
+
+	files, err := filepath.Glob(filepath.Join(filepath.Dir(frontier.localDBPath), "*.sqlite"))
+	for _, file := range files {
+		if err = os.Remove(file); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -89,3 +89,12 @@ func (c *builtInCoordinator) LockByIPAddrOf(host string) (bool, error) {
 func (c *builtInCoordinator) Finish() error {
 	return c.conn.Close()
 }
+
+func (c *builtInCoordinator) Reset() error {
+	_, err := c.conn.Do("FLUSHALL")
+	if err != nil {
+		return err
+	}
+
+	return c.Finish()
+}

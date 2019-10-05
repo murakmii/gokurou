@@ -23,6 +23,7 @@ type Configuration struct {
 	AwsRegion          string
 	AwsAccessKeyID     string
 	AwsSecretAccessKey string
+	AwsS3EndPoint      string
 
 	ArtifactGathererProvider ArtifactGathererProviderFunc
 	URLFrontierProvider      URLFrontierProviderFunc
@@ -66,4 +67,8 @@ func (c *Configuration) MustOptionAsString(key string) string {
 	}
 
 	return *str
+}
+
+func (c *Configuration) AwsConfigurationMayBeDummy() bool {
+	return len(c.AwsS3EndPoint) > 0
 }
