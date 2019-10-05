@@ -79,6 +79,12 @@ func (sanitized *SanitizedURL) Host() string {
 	return sanitized.url.Host
 }
 
+// ホスト部が表すドメインのTLDを返す
+func (sanitized *SanitizedURL) TLD() string {
+	labels := strings.Split(sanitized.Host(), ".")
+	return labels[len(labels)-1]
+}
+
 // URLのパス部を返す
 func (sanitized *SanitizedURL) Path() string {
 	return sanitized.url.Path
@@ -104,10 +110,17 @@ func (sanitized *SanitizedURL) Join(str string) (*SanitizedURL, error) {
 	}
 
 	if !u.IsAbs() {
+		var newPath string
+		if strings.HasPrefix(u.Path, "/") {
+			newPath = u.Path
+		} else {
+			newPath = path.Join(sanitized.url.Path, u.Path)
+		}
+
 		u = &url.URL{
 			Scheme:   sanitized.url.Scheme,
 			Host:     sanitized.url.Host,
-			Path:     path.Join(sanitized.url.Path, u.Path),
+			Path:     newPath,
 			RawQuery: u.Query().Encode(),
 		}
 	}

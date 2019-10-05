@@ -65,7 +65,12 @@ func TestDefaultURLFrontier_Push(t *testing.T) {
 
 	t.Run("十分にPushしたことがない場合、即座にPushする", func(t *testing.T) {
 		url := buildRandomHostURL()
-		if err := frontier.Push(ctx, url); err != nil {
+		spawned := &gokurou.SpawnedURL{
+			From:    buildRandomHostURL(),
+			Spawned: []*www.SanitizedURL{url},
+		}
+
+		if err := frontier.Push(ctx, spawned); err != nil {
 			t.Errorf("Push(%s) = %v", url, err)
 		}
 
@@ -87,7 +92,12 @@ func TestDefaultURLFrontier_Push(t *testing.T) {
 			url := buildRandomHostURL()
 			want[i-1] = url.String()
 
-			if err := frontier.Push(ctx, url); err != nil {
+			spawned := &gokurou.SpawnedURL{
+				From:    buildRandomHostURL(),
+				Spawned: []*www.SanitizedURL{url},
+			}
+
+			if err := frontier.Push(ctx, spawned); err != nil {
 				t.Errorf("Push(%s) = %v", url, err)
 				break
 			}

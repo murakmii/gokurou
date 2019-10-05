@@ -27,8 +27,10 @@ func (p *mockPipeline) OutputArtifact(ctx context.Context, a interface{}) {
 	p.collected = append(p.collected, a.(*artifact))
 }
 
-func (p *mockPipeline) OutputCollectedURL(ctx context.Context, url *www.SanitizedURL) {
-	p.pushed = append(p.pushed, url)
+func (p *mockPipeline) OutputCollectedURL(ctx context.Context, spawned *gokurou.SpawnedURL) {
+	for _, url := range spawned.Spawned {
+		p.pushed = append(p.pushed, url)
+	}
 }
 
 func buildConfiguration() *gokurou.Configuration {
@@ -88,7 +90,10 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 			t.Errorf("Crawl() collected invalid artifact")
 		}
 
-		if len(out.pushed) != 1 || out.pushed[0].String() != "http://www.example.com/foobar.html" {
+		if len(out.pushed) != 3 ||
+			out.pushed[0].String() != ts.URL+"/" ||
+			out.pushed[1].String() != "http://www.example.com/foobar.html" ||
+			out.pushed[2].String() != "http://www.example.com/hogefuga.html" {
 			t.Errorf("Crawl() collected invalid urls")
 		}
 	})

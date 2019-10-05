@@ -30,6 +30,12 @@ type Coordinator interface {
 	Reset() error
 }
 
+// あるページから発生したURLを表す型
+type SpawnedURL struct {
+	From    *www.SanitizedURL
+	Spawned []*www.SanitizedURL
+}
+
 // クロール対象となるURLの集合を扱うための実装を要求するinterface
 type URLFrontier interface {
 	Finisher
@@ -38,7 +44,7 @@ type URLFrontier interface {
 	Seeding(url *www.SanitizedURL) error
 
 	// URLの集合に対してURLを追加する
-	Push(ctx context.Context, url *www.SanitizedURL) error
+	Push(ctx context.Context, spawnedURL *SpawnedURL) error
 
 	// URLの集合からURLを1つ取り出す
 	Pop(ctx context.Context) (*www.SanitizedURL, error)

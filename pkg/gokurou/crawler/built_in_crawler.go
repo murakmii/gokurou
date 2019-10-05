@@ -174,22 +174,10 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		baseArtifact.Title = page.Title()
 	}
 
-	// どうせ1ホストあたり1回しかクロールしないので、この時点で1ホスト1URLになるようにフィルタしてから結果を送信する
-	urlPerHost := make(map[string]*www.SanitizedURL)
-	for _, collectedURL := range page.AllURL() {
-		if collectedURL.Host() == url.Host() {
-			continue
-		}
-
-		u, ok := urlPerHost[collectedURL.Host()]
-		if !ok || len(u.Path()) > len(collectedURL.Path()) {
-			urlPerHost[collectedURL.Host()] = collectedURL
-		}
-	}
-
-	for _, u := range urlPerHost {
-		out.OutputCollectedURL(ctx, u)
-	}
+	out.OutputCollectedURL(ctx, &gokurou.SpawnedURL{
+		From:    url,
+		Spawned: page.AllURL(),
+	})
 
 	return nil
 }

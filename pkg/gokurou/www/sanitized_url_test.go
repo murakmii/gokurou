@@ -78,6 +78,29 @@ func TestSanitizedURLFromString(t *testing.T) {
 	})
 }
 
+func TestSanitizedURL_TLD(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: "http://example.com", want: "com"},
+		{in: "http://example.co.jp", want: "jp"},
+		{in: "http://com", want: "com"},
+	}
+
+	for _, tt := range tests {
+		url, err := SanitizedURLFromString(tt.in)
+		if err != nil {
+			panic(err)
+		}
+
+		got := url.TLD()
+		if got != tt.want {
+			t.Errorf("TLD() = %s, want = %s", got, tt.want)
+		}
+	}
+}
+
 func TestSanitizedURL_RobotsTxtURL(t *testing.T) {
 	url, err := SanitizedURLFromString("http://example.com/path/to/page")
 	if err != nil {
@@ -103,6 +126,10 @@ func TestSanitizedURL_Join(t *testing.T) {
 		{
 			in:  "http://www.example.com/foo",
 			out: "http://www.example.com/foo",
+		},
+		{
+			in:  "/",
+			out: "http://example.com/",
 		},
 	}
 

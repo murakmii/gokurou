@@ -66,8 +66,11 @@ func buildMockURLFrontier(_ context.Context, _ *Configuration) (URLFrontier, err
 	return &mockURLFrontier{queue: []*www.SanitizedURL{initialURL}}, nil
 }
 
-func (f *mockURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
-	f.queue = append(f.queue, url)
+func (f *mockURLFrontier) Push(ctx context.Context, spawned *SpawnedURL) error {
+	for _, url := range spawned.Spawned {
+		f.queue = append(f.queue, url)
+	}
+
 	return nil
 }
 
@@ -115,8 +118,11 @@ func (c *mockCrawler) Crawl(ctx context.Context, url *www.SanitizedURL, out Outp
 		panic(err)
 	}
 
-	out.OutputCollectedURL(ctx, nextComURL)
-	out.OutputCollectedURL(ctx, nextOrgURL)
+	out.OutputCollectedURL(ctx, &SpawnedURL{
+		From:    url,
+		Spawned: []*www.SanitizedURL{nextComURL, nextOrgURL},
+	})
+
 	return nil
 }
 
