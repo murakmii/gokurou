@@ -31,6 +31,7 @@ func (s *mockCoordinator) LockByIPAddrOf(host string) (bool, error) {
 }
 
 func (s *mockCoordinator) Finish() error { return nil }
+func (s *mockCoordinator) Reset() error  { return nil }
 
 // ArtifactGathererのモック。単にglobalArtifactに結果を溜め込む
 type mockArtifactGatherer struct{}
@@ -80,7 +81,9 @@ func (f *mockURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	}
 }
 
-func (f *mockURLFrontier) Finish() error { return nil }
+func (f *mockURLFrontier) Seeding(url *www.SanitizedURL) error { return nil }
+func (f *mockURLFrontier) Finish() error                       { return nil }
+func (f *mockURLFrontier) Reset() error                        { return nil }
 
 // Crawlerのモック。与えられたURLから次のクロール対象となるURLを生成していく
 type mockCrawler struct{}
