@@ -91,3 +91,18 @@ func Start(conf *Configuration) error {
 	wg.Wait()
 	return TracerFromContext(ctx).Finish()
 }
+
+func Reset(conf *Configuration) error {
+	/*ctx, err := RootContext(conf)
+	if err != nil {
+		return err
+	}
+
+	coordinator, err := conf.CoordinatorProvider(conf)
+	if err != nil {
+		return xerrors.Errorf("failed to setup coordinator: %v", err)
+	}
+
+	*/
+	return nil
+}
