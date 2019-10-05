@@ -94,6 +94,15 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}, nil
 }
 
+func (frontier *builtInURLFrontier) Seeding(url *www.SanitizedURL) error {
+	_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (1, ?)", url.String())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (frontier *builtInURLFrontier) Push(ctx context.Context, url *www.SanitizedURL) error {
 	destGWN := frontier.computeDestinationGWN(url)
 

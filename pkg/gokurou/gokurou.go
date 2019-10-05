@@ -34,6 +34,9 @@ type Coordinator interface {
 type URLFrontier interface {
 	Finisher
 
+	// 初期URLの設定をサポートする
+	Seeding(url *www.SanitizedURL) error
+
 	// URLの集合に対してURLを追加する
 	Push(ctx context.Context, url *www.SanitizedURL) error
 
@@ -78,6 +81,30 @@ type Crawler interface {
 	Crawl(ctx context.Context, url *www.SanitizedURL, out OutputPipeline) error
 }
 
+// 初期URLを設定する
+func Seeding(conf *Configuration, url string) error {
+	sanitized, err := www.SanitizedURLFromString(url)
+	if err != nil {
+		return xerrors.Errorf("failed to parse url: %w", err)
+	}
+
+	ctx, err := contextGWN1(conf)
+	if err != nil {
+		return err
+	}
+
+	frontier, err := conf.URLFrontierProvider(ctx, conf)
+	if err != nil {
+		return err
+	}
+
+	if err = frontier.Seeding(sanitized); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // 指定の設定に基づいてクロールを開始する
 func Start(conf *Configuration) error {
 	ctx, err := RootContext(conf)
@@ -100,6 +127,7 @@ func Start(conf *Configuration) error {
 	return TracerFromContext(ctx).Finish()
 }
 
+// クロール中に生じたデータのリセットを実行する(成果物を除く)
 func Reset(conf *Configuration) error {
 	coordinator, err := conf.CoordinatorProvider(conf)
 	if err != nil {
@@ -110,12 +138,11 @@ func Reset(conf *Configuration) error {
 		return xerrors.Errorf("failed to reset by coordinator: %v", err)
 	}
 
-	ctx, err := RootContext(conf)
+	ctx, err := contextGWN1(conf)
 	if err != nil {
 		return err
 	}
 
-	ctx, _ = WorkerContext(ctx, 1)
 	frontier, err := conf.URLFrontierProvider(ctx, conf)
 	if err != nil {
 		return xerrors.Errorf("failed to setup url frontier: %v", err)
@@ -126,4 +153,14 @@ func Reset(conf *Configuration) error {
 	}
 
 	return nil
+}
+
+func contextGWN1(conf *Configuration) (context.Context, error) {
+	ctx, err := RootContext(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, _ = WorkerContext(ctx, 1)
+	return ctx, nil
 }

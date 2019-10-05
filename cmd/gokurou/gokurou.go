@@ -71,7 +71,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "gokurou"
 	app.Usage = "Let's crawl web!"
-	app.UsageText = "gokurou [global options] command"
+	app.UsageText = "gokurou [global options] command [arguments...]"
 	app.Version = "0.0.1"
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -83,15 +83,29 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
+			Name:      "seeding",
+			Usage:     "Seeding initial URL",
+			UsageText: "gokurou seeding [command options]",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:     "url,u",
+					Usage:    "seed `URL`",
+					Required: true,
+				},
+			},
+			Action: seedingCommand,
+		},
+		{
+			Name:      "crawl",
+			Usage:     "Start to crawl",
+			UsageText: "gokurou -c PATH crawl",
+			Action:    crawlCommand,
+		},
+		{
 			Name:      "reset",
 			Usage:     "Reset all data(exclude 'artifact')",
 			UsageText: "gokurou -c PATH reset",
 			Action:    resetCommand,
-		},
-		{
-			Name:   "crawl",
-			Usage:  "Start to crawl",
-			Action: crawlCommand,
 		},
 	}
 
@@ -119,6 +133,20 @@ func crawlCommand(c *cli.Context) error {
 
 	if err = gokurou.Start(conf); err != nil {
 		return xerrors.Errorf("failed to crawl: %w", err)
+	}
+
+	return nil
+}
+
+// 初期URL設定コマンド
+func seedingCommand(c *cli.Context) error {
+	conf, err := buildConfiguration(c.GlobalString("config"))
+	if err != nil {
+		return xerrors.Errorf("failed to load configuration: %v", err)
+	}
+
+	if err = gokurou.Seeding(conf, c.String("url")); err != nil {
+		return xerrors.Errorf("failed to seeding: %w", err)
 	}
 
 	return nil
