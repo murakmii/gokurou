@@ -43,6 +43,14 @@ func buildURLFrontier(ctx context.Context) *builtInURLFrontier {
 	return frontier
 }
 
+func mustURL(url string) *www.SanitizedURL {
+	s, err := www.SanitizedURLFromString(url)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
 func buildRandomHostURL() *www.SanitizedURL {
 	u, err := uuid.NewRandom()
 	if err != nil {
@@ -57,7 +65,7 @@ func buildRandomHostURL() *www.SanitizedURL {
 	return url
 }
 
-func TestDefaultURLFrontier_Push(t *testing.T) {
+func TestBuiltInURLFrontier_Push(t *testing.T) {
 	ctx := buildContext()
 	frontier := buildURLFrontier(ctx)
 
@@ -115,7 +123,7 @@ func TestDefaultURLFrontier_Push(t *testing.T) {
 	})
 }
 
-func TestDefaultURLFrontier_Pop(t *testing.T) {
+func TestBuiltInURLFrontier_Pop(t *testing.T) {
 	tests := []struct {
 		name  string
 		setup func(frontier *builtInURLFrontier)
@@ -195,11 +203,34 @@ func TestDefaultURLFrontier_Pop(t *testing.T) {
 	}
 }
 
-func TestDefaultURLFrontier_Finish(t *testing.T) {
+func TestBuiltInURLFrontier_Finish(t *testing.T) {
 	ctx := buildContext()
 	frontier := buildURLFrontier(ctx)
 
 	if err := frontier.Finish(); err != nil {
 		t.Errorf("Finish() = %v", err)
+	}
+}
+
+func TestBuiltInURLFrontier_filterURL(t *testing.T) {
+	frontier := buildURLFrontier(buildContext())
+	frontier.tldFilter = append(frontier.tldFilter, "com")
+
+	spawned := &gokurou.SpawnedURL{
+		From: mustURL("http://example.com"),
+		Spawned: []*www.SanitizedURL{
+			mustURL("http://www.example.com/newhost"),
+			mustURL("http://example.com/samehost"),
+			mustURL("http://www2.example.com/looooooooonger"),
+			mustURL("http://www2.example.com/shorter"),
+			mustURL("http://example.local"),
+		},
+	}
+
+	got := frontier.filterURL(spawned)
+	if len(got) != 2 ||
+		got[0].String() != "http://www.example.com/newhost" ||
+		got[1].String() != "http://www2.example.com/shorter" {
+		t.Errorf("filterURL() = %+v, want = [http://www.example.com/newhost http://www2.example.com/shorter]", got)
 	}
 }
