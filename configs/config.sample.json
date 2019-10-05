@@ -1,0 +1,39 @@
+{
+  "workers": 3,
+  "machines": 1,
+  "debug_level_logging": true,
+  "json_logging": false,
+
+  "aws": {
+    "region": "ap-northeast-1",
+    "access_key_id": "gokurou-s3-access-key",
+    "secret_access_key": "gokurou-s3-secret-key",
+    "s3_endpoint": "http://localhost:11113"
+  },
+
+  "artifact": {
+    "bucket": "gokurou-dev",
+    "key_prefix": "crawled"
+  },
+
+  "coordinator": {
+    "redis_url": "redis://localhost:11111"
+  },
+
+  "crawling": {
+    "header_ua": "USERAGENT",
+    "primary_ua": "gokurou",
+    "secondary_ua": "googlebot"
+  },
+
+  "url_frontier": {
+    "shared_db_source": "root:gokurou1234@tcp(127.0.0.1:11112)/gokurou_dev?charset=utf8mb4,utf&interpolateParams=true",
+    "local_db_path": "tmp/localdb-%d.sqlite"
+  },
+
+  "tracer": {
+    "namespace": "Gokurou",
+    "crawled_count_dim_name": "Environment",
+    "crawled_count_dim_value": "Development"
+  }
+}

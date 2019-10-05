@@ -1,3 +1,4 @@
 .idea
 tmp/
-/*.json
+/configs/*.json
+!/configs/*.sample.json
