@@ -43,20 +43,41 @@ func buildConfiguration() *gokurou.Configuration {
 
 func buildTestServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Server", "test-server")
-
 		switch r.URL.Path {
 		case "/robots.txt":
+			w.Header().Set("Server", "test-server")
 			_, _ = w.Write([]byte("Disallow: /admin"))
 
 		case "/index.html", "/admin":
+			w.Header().Set("Server", "test-server")
 			_, _ = w.Write([]byte("<title>Hello, crawler</title>"))
 			_, _ = w.Write([]byte("<a href='/'>"))
 			_, _ = w.Write([]byte("<a href='http://www.example.com/foobar.html'>"))
 			_, _ = w.Write([]byte("<a href='http://www.example.com/hogefuga.html'>"))
 
 		case "/noindex.html":
+			w.Header().Set("Server", "test-server")
 			_, _ = w.Write([]byte("<meta name='robots' content='noindex' />"))
+
+		case "/redirect":
+			w.Header().Set("Server", "test-server")
+			w.Header().Set("Location", "/redirect")
+			w.WriteHeader(http.StatusMovedPermanently)
+		}
+	}))
+}
+
+func buildTestServer2() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/robots.txt":
+			w.Header().Set("Server", "test-server")
+			w.Header().Set("Location", "/robots.txt")
+			w.WriteHeader(http.StatusMovedPermanently)
+
+		case "/index.html":
+			w.Header().Set("Server", "test-server")
+			_, _ = w.Write([]byte("<a href='/'>"))
 		}
 	}))
 }
@@ -71,6 +92,9 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 	ts := buildTestServer()
 	defer ts.Close()
+
+	ts2 := buildTestServer2()
+	defer ts2.Close()
 
 	t.Run("問題なくクロールできる場合、結果を収集する", func(t *testing.T) {
 		out := buildMockPipeline()
@@ -123,6 +147,52 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 		if len(out.collected) != 0 || len(out.pushed) != 0 {
 			t.Errorf("Crawl() collects data from disallowed page")
+		}
+	})
+
+	t.Run("robots.txtで無限にリダイレクトする場合、中断してページを取得する", func(t *testing.T) {
+		out := buildMockPipeline()
+		url, _ := www.SanitizedURLFromString(ts2.URL + "/index.html")
+
+		err := crawler.Crawl(ctx, url, out)
+		if err != nil {
+			t.Errorf("Crawl() = %v", err)
+		}
+
+		if len(out.collected) != 1 {
+			t.Errorf("Crawl() does NOT collect artifact")
+		}
+
+		art := out.collected[0]
+		if art.URL != url.String() || art.StatusCode != 200 || art.Server != "test-server" {
+			t.Errorf("Crawl() collected invalid artifact")
+		}
+
+		if len(out.pushed) != 1 || out.pushed[0].String() != ts2.URL+"/" {
+			t.Errorf("Crawl() collected invalid urls")
+		}
+	})
+
+	t.Run("ページ取得で無限にリダイレクトする場合、途中で諦める", func(t *testing.T) {
+		out := buildMockPipeline()
+		url, _ := www.SanitizedURLFromString(ts.URL + "/redirect")
+
+		err := crawler.Crawl(ctx, url, out)
+		if err != nil {
+			t.Errorf("Crawl() = %v", err)
+		}
+
+		if len(out.collected) != 1 {
+			t.Errorf("Crawl() does NOT collect artifact")
+		}
+
+		art := out.collected[0]
+		if art.URL != url.String() || art.StatusCode != 301 || art.Server != "test-server" {
+			t.Errorf("Crawl() collected invalid artifact")
+		}
+
+		if len(out.pushed) != 0 {
+			t.Errorf("Crawl() collected invalid urls")
 		}
 	})
 }

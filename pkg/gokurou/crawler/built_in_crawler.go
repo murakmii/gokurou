@@ -154,7 +154,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		}
 	}()
 
-	if !resp.succeeded() {
+	if !resp.parsableText() {
 		return nil
 	}
 
@@ -205,7 +205,7 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 		err = resp.resp.Body.Close()
 	}()
 
-	if !resp.succeeded() {
+	if !resp.parsableText() {
 		return nil
 	}
 
@@ -246,6 +246,13 @@ func (rw *responseWrapper) bodyReader() (io.Reader, error) {
 	return charset.NewReader(rw.resp.Body, rw.resp.Header.Get("Content-Type"))
 }
 
-func (rw *responseWrapper) succeeded() bool {
-	return rw.resp.StatusCode >= 200 && rw.resp.StatusCode < 300
+func (rw *responseWrapper) parsableText() bool {
+	ct := rw.resp.Header.Get("Content-Type")
+
+	return rw.resp.StatusCode >= 200 &&
+		rw.resp.StatusCode < 300 &&
+		(len(ct) == 0 ||
+			strings.Contains(ct, "text") ||
+			strings.Contains(ct, "html") ||
+			strings.Contains(ct, "xml"))
 }
