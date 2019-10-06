@@ -212,6 +212,35 @@ func TestBuiltInURLFrontier_Finish(t *testing.T) {
 	}
 }
 
+func TestBuiltInURLFrontier_computeDestinationGWN(t *testing.T) {
+	ctx := buildContext()
+	frontier := buildURLFrontier(ctx)
+	frontier.totalWorkers = 10
+
+	tests := []struct {
+		in   string
+		want uint
+	}{
+		{in: "http://example.jp/xxx", want: 4},
+		{in: "https://example.net/dododo", want: 5},
+		{in: "https://www.example.net/x", want: 5},
+		{in: "https://example.org/ppp", want: 6},
+		{in: "http://example.com/hoge", want: 9},
+	}
+
+	for _, tt := range tests {
+		url, err := www.SanitizedURLFromString(tt.in)
+		if err != nil {
+			panic(err)
+		}
+
+		got := frontier.computeDestinationGWN(url)
+		if got != tt.want {
+			t.Errorf("computeDestinationGWN(%s) = %d, want = %d\n", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestBuiltInURLFrontier_filterURL(t *testing.T) {
 	frontier := buildURLFrontier(buildContext())
 	frontier.tldFilter = append(frontier.tldFilter, "com")
