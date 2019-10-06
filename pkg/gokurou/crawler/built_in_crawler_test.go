@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/murakmii/gokurou/pkg/gokurou"
 
@@ -62,6 +63,12 @@ func buildTestServer() *httptest.Server {
 		case "/redirect":
 			w.Header().Set("Server", "test-server")
 			w.Header().Set("Location", "/redirect")
+			w.WriteHeader(http.StatusMovedPermanently)
+
+		case "/slowloop":
+			w.Header().Set("Server", "test-server")
+			w.Header().Set("Location", "/slowloop")
+			time.Sleep(4 * time.Second)
 			w.WriteHeader(http.StatusMovedPermanently)
 		}
 	}))
@@ -193,6 +200,20 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 
 		if len(out.pushed) != 0 {
 			t.Errorf("Crawl() collected invalid urls")
+		}
+	})
+
+	t.Run("リダイレクト込みで時間を浪費するようなフローを辿った場合、途中で諦める", func(t *testing.T) {
+		out := buildMockPipeline()
+		url, _ := www.SanitizedURLFromString(ts.URL + "/slowloop")
+
+		err := crawler.Crawl(ctx, url, out)
+		if err != nil {
+			t.Errorf("Crawl() = %v", err)
+		}
+
+		if len(out.collected) != 0 || len(out.pushed) != 0 {
+			t.Errorf("Crawl() collects data")
 		}
 	})
 }
