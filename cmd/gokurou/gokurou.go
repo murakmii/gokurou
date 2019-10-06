@@ -57,8 +57,9 @@ type crawlingConfig struct {
 }
 
 type urlFrontierConfig struct {
-	SharedDBSource string `json:"shared_db_source"`
-	LocalDBPath    string `json:"local_db_path"`
+	SharedDBSource string   `json:"shared_db_source"`
+	LocalDBPath    string   `json:"local_db_path"`
+	TLDFilter      []string `json:"tld_filter"`
 }
 
 type tracerConfig struct {
@@ -195,6 +196,7 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 	conf.Options["built_in.crawler.primary_ua"] = configContent.Crawling.PrimaryUA
 	conf.Options["built_in.crawler.secondary_ua"] = configContent.Crawling.SecondaryUA
 
+	conf.Options["built_in.url_frontier.tld_filter"] = configContent.URLFrontier.TLDFilter
 	conf.Options["built_in.url_frontier.shared_db_source"] = configContent.URLFrontier.SharedDBSource
 	conf.Options["built_in.url_frontier.local_db_path"] = configContent.URLFrontier.LocalDBPath
 
