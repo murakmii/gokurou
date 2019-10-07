@@ -68,14 +68,18 @@ type Tracer interface {
 
 	// 1クロール完了するごとに呼び出される
 	TraceCrawled(ctx context.Context, err error)
+
+	// 1 HTTP GET完了するごとに呼び出される
+	TraceGetRequest(ctx context.Context, elaspsed float64)
 }
 
 // 何もしないデフォルトのトレーサーを実装しておく
 type NullTracer struct{}
 
-func NewNullTracer() Tracer                                      { return NullTracer{} }
-func (t NullTracer) TraceCrawled(ctx context.Context, err error) {}
-func (t NullTracer) Finish() error                               { return nil }
+func NewNullTracer() Tracer                                       { return NullTracer{} }
+func (t NullTracer) TraceCrawled(_ context.Context, _ error)      {}
+func (t NullTracer) TraceGetRequest(_ context.Context, _ float64) {}
+func (t NullTracer) Finish() error                                { return nil }
 
 // クロールの実装を要求するinterface
 type Crawler interface {

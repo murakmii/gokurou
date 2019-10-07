@@ -17,35 +17,141 @@ import (
 )
 
 const (
-	namespaceConfKey            = "built_in.tracer.namespace"
-	crawledCountDimNameConfKey  = "built_in.tracer.crawled_count_dimention_name"
-	crawledCountDimValueConfKey = "built_in.tracer.crawed_count_dimention_value"
+	namespaceConfKey = "built_in.tracer.namespace"
+	dimNameConfKey   = "built_in.tracer.dimention_name"
+	dimValueConfKey  = "built_in.tracer.dimention_value"
 )
 
 // 動作をトレースしてメトリクスとして外部(CloudWatch)に送信するトレーサー
 type metricsTracer struct {
-	m            *sync.Mutex
-	wg           *sync.WaitGroup
-	timeProvider func() time.Time
+	client   metricsClient
+	ns       string
+	dimName  string
+	dimValue string
 
-	client metricsClient
-	ns     string
-
-	window int64
-
-	crawled     int
-	crawledDimN string
-	crawledDimV string
+	crawled      metrics
+	crawlLatency metrics
 }
 
 // 外部(CloudWatch)送信するためのClient
 type metricsClient interface {
-	put(ns, name, dimName, dimValue string, value float64, timestamp time.Time) error
+	put(ctx context.Context, ns string, e *emitted, dimName, dimValue string)
+	finish()
 }
 
 // metricsClientの実装
 type cloudWatchMetricsClient struct {
 	client *cloudwatch.CloudWatch
+	wg     *sync.WaitGroup
+}
+
+type metrics interface {
+	add(value float64) *emitted
+}
+
+type emitted struct {
+	name      *string
+	unit      *string
+	value     *float64
+	timestamp *time.Time
+}
+
+type sumInMinuteMetrics struct {
+	m            *sync.Mutex
+	timeProvider func() time.Time
+	window       *time.Time
+	count        *float64
+	n            string
+	u            string
+}
+
+type avgInMinuteMetrics struct {
+	m            *sync.Mutex
+	timeProvider func() time.Time
+	window       *time.Time
+	avg          *float64
+	count        int
+	n            string
+	u            string
+}
+
+func newCountInMinuetMetrics(timeProvider func() time.Time, name string, unit string) *sumInMinuteMetrics {
+	defaultCount := 0.0
+	return &sumInMinuteMetrics{
+		m:            &sync.Mutex{},
+		timeProvider: timeProvider,
+		count:        &defaultCount,
+		n:            name,
+		u:            unit,
+	}
+}
+
+func (m *sumInMinuteMetrics) add(value float64) *emitted {
+	var e *emitted
+	nowWindow := m.timeProvider().Truncate(1 * time.Minute)
+
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if m.window != nil && *m.window != nowWindow {
+		e = &emitted{
+			name:      &m.n,
+			unit:      &m.u,
+			value:     m.count,
+			timestamp: m.window,
+		}
+
+		newCount := 0.0
+		m.count = &newCount
+		m.window = &nowWindow
+	} else if m.window == nil {
+		m.window = &nowWindow
+	}
+
+	*m.count += value
+	return e
+}
+
+func newAvgInMinuetMetrics(timeProvider func() time.Time, name string, unit string) *avgInMinuteMetrics {
+	return &avgInMinuteMetrics{
+		m:            &sync.Mutex{},
+		timeProvider: timeProvider,
+		n:            name,
+		u:            unit,
+	}
+}
+
+func (m *avgInMinuteMetrics) add(value float64) *emitted {
+	var e *emitted
+	nowWindow := m.timeProvider().Truncate(1 * time.Minute)
+
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if m.window != nil && *m.window != nowWindow {
+		e = &emitted{
+			name:      &m.n,
+			unit:      &m.u,
+			value:     m.avg,
+			timestamp: m.window,
+		}
+
+		m.avg = nil
+		m.count = 0
+		m.window = &nowWindow
+	} else if m.window == nil {
+		m.window = &nowWindow
+	}
+
+	m.count++
+	if m.count == 1 {
+		m.avg = &value
+	} else {
+		diff := (value - *m.avg) / float64(m.count)
+		*m.avg += diff
+	}
+
+	return e
 }
 
 // metricsTracerをTracerとして生成して返す
@@ -56,51 +162,32 @@ func NewMetricsTracer(conf *gokurou.Configuration) (gokurou.Tracer, error) {
 	}
 
 	return &metricsTracer{
-		m:            &sync.Mutex{},
-		wg:           &sync.WaitGroup{},
-		timeProvider: time.Now,
-		client:       client,
-		ns:           conf.MustOptionAsString(namespaceConfKey),
-		window:       time.Now().Truncate(1 * time.Minute).Unix(),
-		crawled:      0,
-		crawledDimN:  conf.MustOptionAsString(crawledCountDimNameConfKey),
-		crawledDimV:  conf.MustOptionAsString(crawledCountDimValueConfKey),
+		client:   client,
+		ns:       conf.MustOptionAsString(namespaceConfKey),
+		dimName:  conf.MustOptionAsString(dimNameConfKey),
+		dimValue: conf.MustOptionAsString(dimValueConfKey),
+
+		crawled:      newCountInMinuetMetrics(time.Now, "CPM", "Count"),
+		crawlLatency: newAvgInMinuetMetrics(time.Now, "Crawl Latency", "Seconds"),
 	}, nil
 }
 
-// クロールをトレースして1分間の間に発生したクロール回数をCloudWatchにCPM(Crawl per minutes)として送信する
+// クロールをトレースして1分間の間に発生したクロール回数をCloudWatchに送信する
 func (tracer *metricsTracer) TraceCrawled(ctx context.Context, _ error) {
-	now := tracer.timeProvider()
-	currentWindow := now.Truncate(1 * time.Minute).Unix()
-
-	windowUpdated := false
-	count := 0
-
-	tracer.m.Lock()
-	if tracer.window != currentWindow {
-		tracer.wg.Wait()
-		windowUpdated = true
-		count = tracer.crawled
-		tracer.window = currentWindow
-		tracer.crawled = 1
-	} else {
-		tracer.crawled++
+	if e := tracer.crawled.add(1); e != nil {
+		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
 	}
-	defer tracer.m.Unlock()
+}
 
-	if windowUpdated {
-		tracer.wg.Add(1)
-		go func() {
-			defer tracer.wg.Done()
-			if err := tracer.client.put(tracer.ns, "CPM", tracer.crawledDimN, tracer.crawledDimV, float64(count), now.Truncate(1*time.Minute)); err != nil {
-				gokurou.LoggerFromContext(ctx).Warnf("metrics tracer error: %v", err)
-			}
-		}()
+// 1 HTTP GETをトレースして1分間の間に発生したGETリクエストのレイテンシの平均をCloudWatchに送信する
+func (tracer *metricsTracer) TraceGetRequest(ctx context.Context, elapsed float64) {
+	if e := tracer.crawlLatency.add(elapsed); e != nil {
+		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
 	}
 }
 
 func (tracer *metricsTracer) Finish() error {
-	tracer.wg.Wait()
+	tracer.client.finish()
 	return nil
 }
 
@@ -113,26 +200,41 @@ func newCloudWatchMetricsClient(conf *gokurou.Configuration) (metricsClient, err
 	cred := credentials.NewStaticCredentials(conf.AwsAccessKeyID, conf.AwsSecretAccessKey, "")
 	config := aws.NewConfig().WithCredentials(cred).WithRegion(conf.AwsRegion).WithMaxRetries(5)
 
-	return &cloudWatchMetricsClient{client: cloudwatch.New(sess, config)}, nil
+	return &cloudWatchMetricsClient{
+		client: cloudwatch.New(sess, config),
+		wg:     &sync.WaitGroup{},
+	}, nil
 }
 
-func (m *cloudWatchMetricsClient) put(ns, name, dimName, dimValue string, value float64, timestamp time.Time) error {
-	_, err := m.client.PutMetricData(&cloudwatch.PutMetricDataInput{
-		MetricData: []*cloudwatch.MetricDatum{
-			{
-				Dimensions: []*cloudwatch.Dimension{
-					{
-						Name:  &dimName,
-						Value: &dimValue,
+func (m *cloudWatchMetricsClient) put(ctx context.Context, ns string, e *emitted, dimName, dimValue string) {
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		_, err := m.client.PutMetricData(&cloudwatch.PutMetricDataInput{
+			MetricData: []*cloudwatch.MetricDatum{
+				{
+					Dimensions: []*cloudwatch.Dimension{
+						{
+							Name:  &dimName,
+							Value: &dimValue,
+						},
 					},
+					MetricName: e.name,
+					Timestamp:  e.timestamp,
+					Value:      e.value,
+					Unit:       e.unit,
 				},
-				MetricName: &name,
-				Timestamp:  &timestamp,
-				Value:      &value,
 			},
-		},
-		Namespace: &ns,
-	})
+			Namespace: &ns,
+		})
 
-	return err
+		if err != nil {
+			gokurou.LoggerFromContext(ctx).Warnf("failed to put metrics: %v", err)
+		}
+	}()
+}
+
+func (m *cloudWatchMetricsClient) finish() {
+	m.wg.Wait()
+	return
 }
