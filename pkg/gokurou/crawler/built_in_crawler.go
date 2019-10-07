@@ -234,7 +234,10 @@ func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedUR
 	req.Header.Set("User-Agent", crawler.headerUA)
 
 	crawler.httpClient.CheckRedirect = redirectPolicy
+	start := time.Now()
 	resp, err := crawler.httpClient.Do(req)
+	gokurou.TracerFromContext(ctx).TraceGetRequest(ctx, time.Since(start).Seconds())
+
 	if err != nil {
 		return nil, err
 	}
