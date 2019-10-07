@@ -33,7 +33,7 @@
 
   "tracer": {
     "namespace": "Gokurou",
-    "crawled_count_dim_name": "Environment",
-    "crawled_count_dim_value": "Development"
+    "dim_name": "Environment",
+    "dim_value": "Development"
   }
 }

@@ -63,9 +63,9 @@ type urlFrontierConfig struct {
 }
 
 type tracerConfig struct {
-	Namespace            string `json:"namespace"`
-	CrawledCountDimName  string `json:"crawled_count_dim_name"`
-	CrawledCountDimValue string `json:"crawled_count_dim_value"`
+	Namespace string `json:"namespace"`
+	DimName   string `json:"dim_name"`
+	DimValue  string `json:"dim_value"`
 }
 
 func main() {
@@ -203,8 +203,8 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 	if !conf.AwsConfigurationMayBeDummy() {
 		conf.TracerProvider = tracer.NewMetricsTracer
 		conf.Options["built_in.tracer.namespace"] = configContent.Tracer.Namespace
-		conf.Options["built_in.tracer.crawled_count_dimention_name"] = configContent.Tracer.CrawledCountDimName
-		conf.Options["built_in.tracer.crawed_count_dimention_value"] = configContent.Tracer.CrawledCountDimValue
+		conf.Options["built_in.tracer.dimention_name"] = configContent.Tracer.DimName
+		conf.Options["built_in.tracer.dimention_value"] = configContent.Tracer.DimValue
 	}
 
 	return conf, nil
