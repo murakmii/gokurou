@@ -41,7 +41,7 @@ func buildMetricsTracer(client metricsClient, timeProvider func() time.Time) *me
 		dimName:  "Environment",
 		dimValue: "Test",
 
-		crawled:      newCountInMinuetMetrics(timeProvider, "CPM", "Count"),
+		crawled:      newSumInMinuetMetrics(timeProvider, "CPM", "Count"),
 		crawlLatency: newAvgInMinuetMetrics(timeProvider, "Crawl Latency", "Seconds"),
 	}
 }
@@ -80,10 +80,12 @@ func TestMetricsTracer_TraceCrawled(t *testing.T) {
 				time.Unix(61, 0),
 				time.Unix(62, 0),
 				time.Unix(120, 0),
+				time.Unix(130, 0),
+				time.Unix(180, 0),
 			},
 			want: want{
-				values: []float64{3.0, 3.0},
-				times:  []int64{0, 60},
+				values: []float64{3.0, 3.0, 2.0},
+				times:  []int64{0, 60, 120},
 			},
 		},
 	}

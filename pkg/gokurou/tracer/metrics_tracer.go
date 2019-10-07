@@ -75,7 +75,7 @@ type avgInMinuteMetrics struct {
 	u            string
 }
 
-func newCountInMinuetMetrics(timeProvider func() time.Time, name string, unit string) *sumInMinuteMetrics {
+func newSumInMinuetMetrics(timeProvider func() time.Time, name string, unit string) *sumInMinuteMetrics {
 	defaultCount := 0.0
 	return &sumInMinuteMetrics{
 		m:            &sync.Mutex{},
@@ -167,8 +167,8 @@ func NewMetricsTracer(conf *gokurou.Configuration) (gokurou.Tracer, error) {
 		dimName:  conf.MustOptionAsString(dimNameConfKey),
 		dimValue: conf.MustOptionAsString(dimValueConfKey),
 
-		crawled:      newCountInMinuetMetrics(time.Now, "CPM", "Count"),
-		crawlLatency: newAvgInMinuetMetrics(time.Now, "Crawl Latency", "Seconds"),
+		crawled:      newSumInMinuetMetrics(time.Now, "Crawl count", "Count"),
+		crawlLatency: newAvgInMinuetMetrics(time.Now, "Request latency", "Seconds"),
 	}, nil
 }
 
