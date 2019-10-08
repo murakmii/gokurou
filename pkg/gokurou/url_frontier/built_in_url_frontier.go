@@ -90,8 +90,17 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	localDB.SetMaxOpenConns(1)
 	localDB.SetMaxIdleConns(1)
 	localDB.SetConnMaxLifetime(0)
-	if _, err = localDB.Exec("CREATE TABLE IF NOT EXISTS crawled_hosts(host TEXT PRIMARY KEY)"); err != nil {
-		return nil, xerrors.Errorf("failed to setup local db: %v", err)
+
+	initialQueries := []string{
+		"PRAGMA journal_mode=memory", // ガッツ
+		"PRAGMA synchronous=OFF",
+		"CREATE TABLE IF NOT EXISTS crawled_hosts(host TEXT PRIMARY KEY)",
+	}
+
+	for _, query := range initialQueries {
+		if _, err = localDB.Exec(query); err != nil {
+			return nil, xerrors.Errorf("failed to setup local db: %v", err)
+		}
 	}
 
 	return &builtInURLFrontier{
