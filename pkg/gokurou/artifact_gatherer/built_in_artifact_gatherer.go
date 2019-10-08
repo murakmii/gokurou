@@ -53,7 +53,7 @@ func BuiltInArtifactGathererProvider(_ context.Context, conf *gokurou.Configurat
 		storage:     store,
 		keyPrefix:   conf.MustOptionAsString(keyPrefixConfKey),
 		buffer:      bytes.NewBuffer(nil),
-		maxBuffered: 100000,
+		maxBuffered: 50000,
 	}, nil
 }
 
