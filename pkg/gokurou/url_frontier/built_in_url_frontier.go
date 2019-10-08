@@ -129,7 +129,7 @@ func (frontier *builtInURLFrontier) Push(ctx context.Context, spawned *gokurou.S
 		frontier.pushedCount[destGWN]++
 
 		var threshold int
-		if frontier.pushedCount[destGWN] < 1000 {
+		if frontier.pushedCount[destGWN] < 100 {
 			threshold = 1
 		} else {
 			threshold = 50
