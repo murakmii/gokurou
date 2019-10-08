@@ -24,6 +24,8 @@ const (
 	tldFilterConfKey      = "built_in.url_frontier.tld_filter"
 	sharedDBSourceConfKey = "built_in.url_frontier.shared_db_source"
 	localDBPathConfKey    = "built_in.url_frontier.local_db_path"
+
+	noBufferThreshold = 100
 )
 
 type builtInURLFrontier struct {
@@ -136,9 +138,12 @@ func (frontier *builtInURLFrontier) Push(ctx context.Context, spawned *gokurou.S
 
 		frontier.pushBuffer[destGWN] = append(frontier.pushBuffer[destGWN], url.String())
 		frontier.pushedCount[destGWN]++
+		if frontier.pushedCount[destGWN] == noBufferThreshold {
+			gokurou.LoggerFromContext(ctx).Infof("push count for gwn:%d reached no buffer threshold", destGWN)
+		}
 
 		var threshold int
-		if frontier.pushedCount[destGWN] < 100 {
+		if frontier.pushedCount[destGWN] < noBufferThreshold {
 			threshold = 1
 		} else {
 			threshold = 50
