@@ -138,9 +138,6 @@ func (frontier *builtInURLFrontier) Push(ctx context.Context, spawned *gokurou.S
 
 		frontier.pushBuffer[destGWN] = append(frontier.pushBuffer[destGWN], url.String())
 		frontier.pushedCount[destGWN]++
-		if frontier.pushedCount[destGWN] == noBufferThreshold {
-			gokurou.LoggerFromContext(ctx).Infof("push count for gwn:%d reached no buffer threshold", destGWN)
-		}
 
 		var threshold int
 		if frontier.pushedCount[destGWN] < noBufferThreshold {
