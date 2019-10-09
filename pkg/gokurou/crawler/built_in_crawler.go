@@ -105,13 +105,12 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 			Transport: &http.Transport{
 				MaxIdleConns:        1,
 				MaxIdleConnsPerHost: 1,
-				MaxConnsPerHost:     1,
+				MaxConnsPerHost:     2,
 				DisableCompression:  false,
 
-				// NOTE: robots.txtを取得してからページ取得するので、できればKeep-Aliveは有効な方が望ましい。
-				//       が、有効にしているとESTABLISHなコネクションが数百に膨らむので一旦無効にした。
-				//       IdleConnTimeoutやらの調整でなんとか抑えられるかもしれないが、とりあえずDisableKeepAlivesして安定したのでそうしている
-				DisableKeepAlives: true,
+				// ESTABLISHEDなsocketの数に如実に影響するので短めに設定する
+				// robots.txt取得後のページ取得まで生きていれば良い
+				IdleConnTimeout: 2 * time.Second,
 			},
 			CheckRedirect: nil,
 			Timeout:       5 * time.Second,
