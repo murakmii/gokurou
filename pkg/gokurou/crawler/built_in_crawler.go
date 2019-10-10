@@ -33,14 +33,16 @@ type builtInCrawler struct {
 }
 
 type responseWrapper struct {
-	resp *http.Response
+	resp    *http.Response
+	elapsed float64
 }
 
 type artifact struct {
-	URL        string `json:"url"`
-	StatusCode int    `json:"status"`
-	Title      string `json:"title"`
-	Server     string `json:"server"`
+	URL        string  `json:"url"`
+	StatusCode int     `json:"status"`
+	Title      string  `json:"title"`
+	Server     string  `json:"server"`
+	Elapsed    float64 `json:"elapsed"`
 }
 
 var (
@@ -150,6 +152,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		URL:        url.String(),
 		StatusCode: resp.resp.StatusCode,
 		Server:     resp.resp.Header.Get("Server"),
+		Elapsed:    resp.elapsed,
 	}
 
 	defer func() {
@@ -240,13 +243,14 @@ func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedUR
 	crawler.httpClient.CheckRedirect = redirectPolicy
 	start := time.Now()
 	resp, err := crawler.httpClient.Do(req)
-	gokurou.TracerFromContext(ctx).TraceGetRequest(ctx, time.Since(start).Seconds())
+	elapsed := time.Since(start).Seconds()
+	gokurou.TracerFromContext(ctx).TraceGetRequest(ctx, elapsed)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &responseWrapper{resp: resp}, nil
+	return &responseWrapper{resp: resp, elapsed: elapsed}, nil
 }
 
 func (rw *responseWrapper) bodyReader() (io.Reader, error) {
