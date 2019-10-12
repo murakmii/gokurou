@@ -33,6 +33,7 @@ type Coordinator interface {
 // あるページから発生したURLを表す型
 type SpawnedURL struct {
 	From    *www.SanitizedURL
+	Elapsed float64
 	Spawned []*www.SanitizedURL
 }
 

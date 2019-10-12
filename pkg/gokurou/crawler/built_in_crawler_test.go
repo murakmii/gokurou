@@ -13,13 +13,13 @@ import (
 )
 
 type mockPipeline struct {
-	pushed    []*www.SanitizedURL
+	pushed    []*gokurou.SpawnedURL
 	collected []*artifact
 }
 
 func buildMockPipeline() *mockPipeline {
 	return &mockPipeline{
-		pushed:    make([]*www.SanitizedURL, 0),
+		pushed:    make([]*gokurou.SpawnedURL, 0),
 		collected: make([]*artifact, 0),
 	}
 }
@@ -29,9 +29,7 @@ func (p *mockPipeline) OutputArtifact(ctx context.Context, a interface{}) {
 }
 
 func (p *mockPipeline) OutputCollectedURL(ctx context.Context, spawned *gokurou.SpawnedURL) {
-	for _, url := range spawned.Spawned {
-		p.pushed = append(p.pushed, url)
-	}
+	p.pushed = append(p.pushed, spawned)
 }
 
 func buildConfiguration() *gokurou.Configuration {
@@ -47,9 +45,11 @@ func buildTestServer() *httptest.Server {
 		switch r.URL.Path {
 		case "/robots.txt":
 			w.Header().Set("Server", "test-server")
+			_, _ = w.Write([]byte("User-Agent: gokurou\n"))
 			_, _ = w.Write([]byte("Disallow: /admin"))
 
 		case "/index.html", "/admin":
+			time.Sleep(300 * time.Millisecond)
 			w.Header().Set("Server", "test-server")
 			_, _ = w.Write([]byte("<title>Hello, crawler</title>"))
 			_, _ = w.Write([]byte("<a href='/'>"))
@@ -121,15 +121,17 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 			t.Errorf("Crawl() collected invalid artifact")
 		}
 
-		if len(out.pushed) != 3 ||
-			out.pushed[0].String() != ts.URL+"/" ||
-			out.pushed[1].String() != "http://www.example.com/foobar.html" ||
-			out.pushed[2].String() != "http://www.example.com/hogefuga.html" {
+		if len(out.pushed) != 1 ||
+			out.pushed[0].Elapsed < 0.1 || out.pushed[0].Elapsed > 0.5 ||
+			len(out.pushed[0].Spawned) != 3 ||
+			out.pushed[0].Spawned[0].String() != ts.URL+"/" ||
+			out.pushed[0].Spawned[1].String() != "http://www.example.com/foobar.html" ||
+			out.pushed[0].Spawned[2].String() != "http://www.example.com/hogefuga.html" {
 			t.Errorf("Crawl() collected invalid urls")
 		}
 	})
 
-	t.Run("noindexなページの場合、結果を収集しない", func(t *testing.T) {
+	t.Run("noindexなページの場合、結果を収集しないがURLは収集する", func(t *testing.T) {
 		out := buildMockPipeline()
 		url, _ := www.SanitizedURLFromString(ts.URL + "/noindex.html")
 
@@ -138,14 +140,14 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 			t.Errorf("Crawl() = %v", err)
 		}
 
-		if len(out.collected) != 0 || len(out.pushed) != 0 {
+		if len(out.collected) != 0 || len(out.pushed) != 1 {
 			t.Errorf("Crawl() collects data from noindex page")
 		}
 	})
 
 	t.Run("robots.txtでインデックスを禁止されているページの場合、結果を収集しない", func(t *testing.T) {
 		out := buildMockPipeline()
-		url, _ := www.SanitizedURLFromString(ts.URL + "/noindex.html")
+		url, _ := www.SanitizedURLFromString(ts.URL + "/admin.html")
 
 		err := crawler.Crawl(ctx, url, out)
 		if err != nil {
@@ -175,7 +177,7 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 			t.Errorf("Crawl() collected invalid artifact")
 		}
 
-		if len(out.pushed) != 1 || out.pushed[0].String() != ts2.URL+"/" {
+		if len(out.pushed) != 1 || len(out.pushed[0].Spawned) != 1 || out.pushed[0].Spawned[0].String() != ts2.URL+"/" {
 			t.Errorf("Crawl() collected invalid urls")
 		}
 	})

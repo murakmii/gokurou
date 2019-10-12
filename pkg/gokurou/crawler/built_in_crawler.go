@@ -183,6 +183,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 
 	out.OutputCollectedURL(ctx, &gokurou.SpawnedURL{
 		From:    url,
+		Elapsed: resp.elapsed,
 		Spawned: page.AllURL(),
 	})
 
