@@ -72,6 +72,9 @@ type Tracer interface {
 
 	// 1 HTTP GET完了するごとに呼び出される
 	TraceGetRequest(ctx context.Context, elaspsed float64)
+
+	// 1 Pop完了するごとに呼び出される
+	TracePop(ctx context.Context, elapsed float64)
 }
 
 // 何もしないデフォルトのトレーサーを実装しておく
@@ -80,6 +83,7 @@ type NullTracer struct{}
 func NewNullTracer() Tracer                                       { return NullTracer{} }
 func (t NullTracer) TraceCrawled(_ context.Context, _ error)      {}
 func (t NullTracer) TraceGetRequest(_ context.Context, _ float64) {}
+func (t NullTracer) TracePop(_ context.Context, _ float64)        {}
 func (t NullTracer) Finish() error                                { return nil }
 
 // クロールの実装を要求するinterface

@@ -116,6 +116,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 	// URLFrontierのPopを回し続けるgoroutineを立ち上げる
 	go func() {
+		popStarted := time.Now()
 		for {
 			url, err := urlFrontier.Pop(ctx)
 			if err != nil {
@@ -145,6 +146,8 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 				select {
 				case popCh <- url:
+					TracerFromContext(ctx).TracePop(ctx, time.Since(popStarted).Seconds())
+					popStarted = time.Now()
 				case <-ctx.Done():
 					w.resultCh <- nil
 					return
