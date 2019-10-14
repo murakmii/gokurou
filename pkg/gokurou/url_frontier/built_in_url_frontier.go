@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"golang.org/x/xerrors"
 
@@ -66,8 +65,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}()
 
 	sharedDB.SetMaxOpenConns(1)
-	sharedDB.SetMaxIdleConns(2)
-	sharedDB.SetConnMaxLifetime(10 * time.Second)
+	sharedDB.SetMaxIdleConns(1)
 
 	localDBPathPtr := conf.OptionAsString(localDBPathConfKey)
 	var localDBPath string

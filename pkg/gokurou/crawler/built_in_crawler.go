@@ -38,6 +38,7 @@ type responseWrapper struct {
 }
 
 type artifact struct {
+	Host       string  `json:"host"`
 	URL        string  `json:"url"`
 	StatusCode int     `json:"status"`
 	Title      string  `json:"title"`
@@ -135,7 +136,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	resp, err := crawler.request(ctx, url, pageRedirectPolicy)
 	gokurou.TracerFromContext(ctx).TraceCrawled(ctx, err)
 	defer func() {
-		if err != nil && xerrors.Is(err, context.Canceled) {
+		if err != nil && !xerrors.Is(err, context.Canceled) {
 			logger.Warnf("failed to crawl: %v", err)
 		}
 	}()
@@ -149,6 +150,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	}()
 
 	baseArtifact := &artifact{
+		Host:       url.Host(),
 		URL:        url.String(),
 		StatusCode: resp.resp.StatusCode,
 		Server:     resp.resp.Header.Get("Server"),
@@ -200,7 +202,7 @@ func (crawler *builtInCrawler) Finish() error {
 func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) *robots.Txt {
 	resp, err := crawler.request(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
-		if err != nil && xerrors.Is(err, context.Canceled) {
+		if err != nil && !xerrors.Is(err, context.Canceled) {
 			gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
 		}
 	}()
