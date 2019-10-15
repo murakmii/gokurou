@@ -108,6 +108,7 @@ func Seeding(conf *Configuration, url string) error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
 	frontier, err := conf.URLFrontierProvider(ctx, conf)
 	if err != nil {
 		return err
@@ -117,7 +118,8 @@ func Seeding(conf *Configuration, url string) error {
 		return err
 	}
 
-	return nil
+	cancel()
+	return frontier.Finish()
 }
 
 // 指定の設定に基づいてクロールを開始する
