@@ -32,7 +32,7 @@ func buildRedisPubSubURLFrontier(ctx context.Context, url ...string) *redisPubSu
 	}
 	_ = r.Close()
 
-	f, err := NewRedisPubSubURLFrontierProvider(ctx, conf)
+	f, err := RedisPubSubURLFrontierProvider(ctx, conf)
 	if err != nil {
 		panic(err)
 	}

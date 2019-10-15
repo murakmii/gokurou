@@ -57,9 +57,9 @@ type crawlingConfig struct {
 }
 
 type urlFrontierConfig struct {
-	SharedDBSource string   `json:"shared_db_source"`
-	LocalDBPath    string   `json:"local_db_path"`
-	TLDFilter      []string `json:"tld_filter"`
+	RedisURL    string   `json:"redis_url"`
+	LocalDBPath string   `json:"local_db_path"`
+	TLDFilter   []string `json:"tld_filter"`
 }
 
 type tracerConfig struct {
@@ -184,7 +184,7 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 
 	conf.CoordinatorProvider = coordinator.BuiltInCoordinatorProvider
 	conf.ArtifactGathererProvider = artifact_gatherer.BuiltInArtifactGathererProvider
-	conf.URLFrontierProvider = url_frontier.BuiltInURLFrontierProvider
+	conf.URLFrontierProvider = url_frontier.RedisPubSubURLFrontierProvider
 	conf.CrawlerProvider = crawler.BuiltInCrawlerProvider
 
 	conf.Options["built_in.artifact_gatherer.bucket"] = configContent.Artifact.Bucket
@@ -196,9 +196,9 @@ func buildConfiguration(path string) (*gokurou.Configuration, error) {
 	conf.Options["built_in.crawler.primary_ua"] = configContent.Crawling.PrimaryUA
 	conf.Options["built_in.crawler.secondary_ua"] = configContent.Crawling.SecondaryUA
 
-	conf.Options["built_in.url_frontier.tld_filter"] = configContent.URLFrontier.TLDFilter
-	conf.Options["built_in.url_frontier.shared_db_source"] = configContent.URLFrontier.SharedDBSource
-	conf.Options["built_in.url_frontier.local_db_path"] = configContent.URLFrontier.LocalDBPath
+	conf.Options["redis_pub_sub_url_frontier.tld_filter"] = configContent.URLFrontier.TLDFilter
+	conf.Options["redis_pub_sub_url_frontier.redis_url"] = configContent.URLFrontier.RedisURL
+	conf.Options["redis_pub_sub_url_frontier.local_db_path"] = configContent.URLFrontier.LocalDBPath
 
 	if !conf.AwsConfigurationMayBeDummy() {
 		conf.TracerProvider = tracer.NewMetricsTracer

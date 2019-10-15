@@ -38,7 +38,7 @@ type redisPubSubURLFrontier struct {
 	tldFilter []string
 }
 
-func NewRedisPubSubURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
+func RedisPubSubURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
 	var tldFilter []string
 	tldFilterValue, exists := conf.Options[pubSubtldFilterConfKey]
 	if exists {
