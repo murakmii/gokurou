@@ -113,10 +113,10 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 
 				// ESTABLISHEDなsocketの数に如実に影響するので短めに設定する
 				// robots.txt取得後のページ取得まで生きていれば良い
-				IdleConnTimeout: 2 * time.Second,
+				IdleConnTimeout: 1 * time.Second,
 			},
 			CheckRedirect: nil,
-			Timeout:       5 * time.Second,
+			Timeout:       10 * time.Second,
 		},
 	}, nil
 }

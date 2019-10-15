@@ -105,8 +105,8 @@ func (w *Worker) startArtifactGatherer(ctx context.Context, conf *Configuration)
 // URLFrontire用goroutineを起動する
 func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coordinator Coordinator) (URLFrontier, <-chan *www.SanitizedURL, chan<- *SpawnedURL) {
 	ctx = SubSystemContext(ctx, "url-frontier")
-	popCh := make(chan *www.SanitizedURL, 5)
-	pushCh := make(chan *SpawnedURL, 5)
+	popCh := make(chan *www.SanitizedURL, 1)
+	pushCh := make(chan *SpawnedURL, 50)
 
 	urlFrontier, err := conf.URLFrontierProvider(ctx, conf)
 	if err != nil {
