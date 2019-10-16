@@ -36,7 +36,6 @@ type builtInURLFrontier struct {
 
 	localDB     *sql.DB
 	localDBPath string
-	nextPopID   int64
 	popBuffer   []string
 }
 
@@ -111,7 +110,6 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		pushedCount:  make(map[uint]uint64),
 		localDB:      localDB,
 		localDBPath:  localDBPath,
-		nextPopID:    0,
 		popBuffer:    make([]string, 0),
 	}, nil
 }
@@ -181,8 +179,8 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 		if len(frontier.popBuffer) == 0 {
 			var id int64
 			var tabJoinedURL string
-			query := "SELECT id, tab_joined_url FROM urls WHERE gwn = ? AND id > ? ORDER BY id LIMIT 1"
-			err := frontier.sharedDB.QueryRow(query, gokurou.GWNFromContext(ctx), frontier.nextPopID).Scan(&id, &tabJoinedURL)
+			query := "SELECT id, tab_joined_url FROM urls WHERE gwn = ? ORDER BY id LIMIT 1"
+			err := frontier.sharedDB.QueryRow(query, gokurou.GWNFromContext(ctx)).Scan(&id, &tabJoinedURL)
 
 			if err == sql.ErrNoRows {
 				return nil, nil
@@ -190,7 +188,9 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 				return nil, err
 			}
 
-			frontier.nextPopID = id
+			if _, err := frontier.sharedDB.Exec("DELETE FROM urls WHERE id = ?", id); err != nil {
+				return nil, err
+			}
 			frontier.popBuffer = strings.Split(tabJoinedURL, "\t")
 		}
 

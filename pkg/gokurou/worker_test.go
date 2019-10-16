@@ -84,9 +84,9 @@ func (f *mockURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	}
 }
 
-func (f *mockURLFrontier) Seeding(url *www.SanitizedURL) error { return nil }
-func (f *mockURLFrontier) Finish() error                       { return nil }
-func (f *mockURLFrontier) Reset() error                        { return nil }
+func (f *mockURLFrontier) Seeding(url []string) error { return nil }
+func (f *mockURLFrontier) Finish() error              { return nil }
+func (f *mockURLFrontier) Reset() error               { return nil }
 
 // Crawlerのモック。与えられたURLから次のクロール対象となるURLを生成していく
 type mockCrawler struct{}
