@@ -23,7 +23,8 @@ const (
 	pubSubRedisURLConfKey    = "redis_pub_sub_url_frontier.redis_url"
 	pubSubLocalDBPathConfKey = "redis_pub_sub_url_frontier.local_db_path"
 
-	maxURLPerHost = 5
+	maxURLPerHost    = 5
+	deactivationTime = 2000000000
 )
 
 type redisPubSubURLFrontier struct {
@@ -36,6 +37,11 @@ type redisPubSubURLFrontier struct {
 	localDBPath string
 
 	tldFilter []string
+}
+
+type dbExecutor interface {
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
 func RedisPubSubURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
@@ -148,7 +154,6 @@ func (f *redisPubSubURLFrontier) subscribeLoop(ctx context.Context, ch chan<- er
 		var err error
 		defer func() { ch <- err }()
 
-	SUBSCRIBE:
 		for {
 			select {
 			case <-ctx.Done():
@@ -165,51 +170,58 @@ func (f *redisPubSubURLFrontier) subscribeLoop(ctx context.Context, ch chan<- er
 				continue
 			}
 
-			hostID, noHost, err := f.queryRowAsInt64("SELECT id FROM hosts WHERE host = ?", sanitized.Host())
-			if err != nil {
-				return
-			}
-
-			if !noHost {
-				savedURLs, err := f.queryRowsAsStrings("SELECT url FROM urls WHERE host_id = ?", maxURLPerHost, hostID)
-				if err != nil {
-					return
-				}
-
-				if len(savedURLs) >= maxURLPerHost {
-					continue
-				}
-
-				for _, u := range savedURLs {
-					s, err := www.SanitizedURLFromString(u)
-					if err != nil {
-						return
-					}
-
-					if s.Path() == sanitized.Path() {
-						continue SUBSCRIBE
-					}
-				}
-			}
-
 			err = beginTx(f.localDB, func(tx *sql.Tx) error {
+				now := time.Now().Unix()
+
+				var hostID, crawlableAt int64
+				noHost := false
+				if errTx := tx.QueryRow("SELECT id, crawlable_at FROM hosts WHERE host = ?", sanitized.Host()).Scan(&hostID, &crawlableAt); errTx != nil {
+					if errTx == sql.ErrNoRows {
+						noHost = true
+					} else {
+						return errTx
+					}
+				}
+
 				if noHost {
-					inserted, errInTx := tx.Exec("INSERT INTO hosts(host, crawlable_at) VALUES(?, ?)", sanitized.Host(), time.Now().Unix())
-					if errInTx != nil {
-						return errInTx
+					inserted, errTx := tx.Exec("INSERT INTO hosts(host, crawlable_at) VALUES(?, ?)", sanitized.Host(), now)
+					if errTx != nil {
+						return errTx
 					}
 
-					if hostID, errInTx = inserted.LastInsertId(); errInTx != nil {
-						return errInTx
+					if hostID, errTx = inserted.LastInsertId(); errTx != nil {
+						return errTx
+					}
+				} else {
+					savedURLs, errTx := f.queryRowsAsStrings(tx, "SELECT url FROM urls WHERE host_id = ?", maxURLPerHost, hostID)
+					if errTx != nil {
+						return errTx
+					}
+
+					if len(savedURLs) >= maxURLPerHost {
+						return nil
+					}
+
+					for _, u := range savedURLs {
+						s, errTx := www.SanitizedURLFromString(u)
+						if errTx != nil {
+							return errTx
+						}
+
+						if s.Path() == sanitized.Path() {
+							return nil
+						}
+					}
+
+					if crawlableAt == deactivationTime {
+						if _, errTx := tx.Exec("UPDATE hosts SET crawlable_at = ? WHERE id = ?", now+60, hostID); errTx != nil {
+							return errTx
+						}
 					}
 				}
 
-				query := "INSERT INTO urls(host_id, url, crawled) VALUES(?, ?, 0)"
-				if _, errInTx := tx.Exec(query, hostID, sanitized.String()); errInTx != nil {
-					return errInTx
-				}
-
-				return nil
+				_, errTx := tx.Exec("INSERT INTO urls(host_id, url, crawled) VALUES(?, ?, 0)", hostID, sanitized.String())
+				return errTx
 			})
 			if err != nil {
 				return
@@ -254,7 +266,7 @@ func (f *redisPubSubURLFrontier) Push(ctx context.Context, spawned *gokurou.Spaw
 
 func (f *redisPubSubURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	now := time.Now().Unix()
-	hostID, noHost, err := f.queryRowAsInt64("SELECT id FROM hosts WHERE crawlable_at <= ? LIMIT 1", now)
+	hostID, noHost, err := f.queryRowAsInt64(f.localDB, "SELECT id FROM hosts WHERE crawlable_at <= ? LIMIT 1", now)
 	if err != nil {
 		return nil, err
 	}
@@ -262,38 +274,41 @@ func (f *redisPubSubURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, er
 		return nil, nil
 	}
 
-	var urlID int64
-	var url string
-	if err := f.localDB.QueryRow("SELECT id, url FROM urls WHERE host_id = ? AND crawled = 0", hostID).Scan(&urlID, &url); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	sanitized, err := www.SanitizedURLFromString(url)
-	if err != nil {
-		return nil, err
-	}
-
-	crawledCount, _, err := f.queryRowAsInt64("SELECT COUNT(*) FROM urls WHERE host_id = ? AND crawled = 1", hostID)
-	if err != nil {
-		return nil, err
-	}
-
-	var nextInterval int64
-	if crawledCount+1 >= maxURLPerHost {
-		nextInterval = 3600 * 24 * 365
-	} else {
-		nextInterval = 120
-	}
+	var sanitized *www.SanitizedURL
 
 	err = beginTx(f.localDB, func(tx *sql.Tx) error {
-		if _, err := tx.Exec("UPDATE urls SET crawled = 1 WHERE id = ?", urlID); err != nil {
-			return err
+		var urlID int64
+		var url string
+		errTx := tx.QueryRow("SELECT id, url FROM urls WHERE host_id = ? AND crawled = 0", hostID).Scan(&urlID, &url)
+		if errTx != nil {
+			if errTx == sql.ErrNoRows {
+				_, errTx = tx.Exec("UPDATE hosts SET crawlable_at = ? WHERE id = ?", deactivationTime, hostID)
+			}
+			return errTx
 		}
-		if _, err := tx.Exec("UPDATE hosts SET crawlable_at = ? WHERE id = ?", now+nextInterval, hostID); err != nil {
-			return err
+
+		sanitized, errTx = www.SanitizedURLFromString(url)
+		if errTx != nil {
+			return errTx
+		}
+
+		crawledCount, _, errTx := f.queryRowAsInt64(tx, "SELECT COUNT(*) FROM urls WHERE host_id = ? AND crawled = 1", hostID)
+		if errTx != nil {
+			return errTx
+		}
+
+		var nextCrawlableAt int64
+		if crawledCount+1 >= maxURLPerHost {
+			nextCrawlableAt = deactivationTime
+		} else {
+			nextCrawlableAt = now + 120
+		}
+
+		if _, errTx := tx.Exec("UPDATE urls SET crawled = 1 WHERE id = ?", urlID); errTx != nil {
+			return errTx
+		}
+		if _, errTx := tx.Exec("UPDATE hosts SET crawlable_at = ? WHERE id = ?", nextCrawlableAt, hostID); errTx != nil {
+			return errTx
 		}
 
 		return nil
@@ -394,9 +409,9 @@ func (f *redisPubSubURLFrontier) subscribe(streamName string) (*www.SanitizedURL
 	return sanitized, nil
 }
 
-func (f *redisPubSubURLFrontier) queryRowAsInt64(query string, param ...interface{}) (int64, bool, error) {
+func (f *redisPubSubURLFrontier) queryRowAsInt64(executor dbExecutor, query string, param ...interface{}) (int64, bool, error) {
 	var value int64
-	if err := f.localDB.QueryRow(query, param...).Scan(&value); err != nil {
+	if err := executor.QueryRow(query, param...).Scan(&value); err != nil {
 		if err == sql.ErrNoRows {
 			return 0, true, nil
 		} else {
@@ -407,8 +422,8 @@ func (f *redisPubSubURLFrontier) queryRowAsInt64(query string, param ...interfac
 	return value, false, nil
 }
 
-func (f *redisPubSubURLFrontier) queryRowsAsStrings(query string, countEstimation int, param ...interface{}) ([]string, error) {
-	rows, err := f.localDB.Query(query, param...)
+func (f *redisPubSubURLFrontier) queryRowsAsStrings(executor dbExecutor, query string, countEstimation int, param ...interface{}) ([]string, error) {
+	rows, err := executor.Query(query, param...)
 	if err != nil {
 		return nil, err
 	}

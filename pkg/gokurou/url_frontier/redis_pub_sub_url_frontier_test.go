@@ -185,6 +185,50 @@ func TestRedisPubSubURLFrontier_subscribeLoop(t *testing.T) {
 			panic(err)
 		}
 	})
+
+	t.Run("URL保存時に対象ホストがクロールされない設定になっていた場合、クロールされるようにする", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(ctx)
+		f := buildRedisPubSubURLFrontier(ctx, "http://www.example.com/path/to/page")
+		if _, err := f.localDB.Exec("INSERT INTO hosts(host, crawlable_at) VALUES('www.example.com', ?)", deactivationTime); err != nil {
+			panic(err)
+		}
+		time.Sleep(2500 * time.Millisecond)
+		cancel()
+		err := <-f.subCh
+		if err != nil {
+			t.Errorf("subscribeLoop() = %v", err)
+		}
+		f.subCh <- err
+
+		var urlCount int64
+		if err := f.localDB.QueryRow("SELECT COUNT(*) FROM urls WHERE host_id = 1").Scan(&urlCount); err != nil {
+			t.Errorf("subscribeLoop() = %v", err)
+		}
+		if urlCount != 1 {
+			t.Errorf("subscribeLoop() does NOT save host")
+		}
+
+		var url string
+		if err := f.localDB.QueryRow("SELECT url FROM urls WHERE host_id = 1").Scan(&url); err != nil {
+			t.Errorf("subscribeLoop() = %v", err)
+		}
+
+		if url != "http://www.example.com/path/to/page" {
+			t.Errorf("subscribeLoop() does NOT save url")
+		}
+
+		var crawlableAt int64
+		if err := f.localDB.QueryRow("SELECT crawlable_at FROM hosts WHERE id = 1").Scan(&crawlableAt); err != nil {
+			t.Errorf("subscribeLoop() = %v", err)
+		}
+		if crawlableAt < time.Now().Unix()+55 || crawlableAt > time.Now().Unix()+65 {
+			t.Errorf("subscribeLoop() does NOT update 'crawlable_at'")
+		}
+
+		if err := f.Finish(); err != nil {
+			panic(err)
+		}
+	})
 }
 
 func TestRedisPubSubURLFrontier_Push(t *testing.T) {
@@ -312,7 +356,7 @@ func TestRedisPubSubURLFrontier_Pop(t *testing.T) {
 			panic(err)
 		}
 
-		if crawlableAt < time.Now().Unix()+110 {
+		if crawlableAt < time.Now().Unix()+110 || crawlableAt > time.Now().Unix()+130 {
 			t.Errorf("Pop() does NOT update next crawlable time")
 		}
 
@@ -358,7 +402,7 @@ func TestRedisPubSubURLFrontier_Pop(t *testing.T) {
 			panic(err)
 		}
 
-		if crawlableAt < time.Now().Unix()+(24*3600*364) {
+		if crawlableAt != deactivationTime {
 			t.Errorf("Pop() does NOT update next crawlable time")
 		}
 
