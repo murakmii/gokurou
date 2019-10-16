@@ -140,18 +140,21 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 					return
 				}
 
+				TracerFromContext(ctx).TracePop(ctx, time.Since(popStarted).Seconds())
+
 				if !locked {
+					popStarted = time.Now()
 					continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
 				}
 
 				select {
 				case popCh <- url:
-					TracerFromContext(ctx).TracePop(ctx, time.Since(popStarted).Seconds())
-					popStarted = time.Now()
 				case <-ctx.Done():
 					w.resultCh <- nil
 					return
 				}
+
+				popStarted = time.Now()
 			}
 		}
 	}()
