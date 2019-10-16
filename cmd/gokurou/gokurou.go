@@ -1,10 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
+	"math/rand"
+	"net/http"
 	"os"
+	"strings"
+	"time"
+
+	"github.com/xwb1989/sqlparser"
 
 	"github.com/murakmii/gokurou/pkg/gokurou/tracer"
 
@@ -84,14 +94,36 @@ func main() {
 
 	app.Commands = []cli.Command{
 		{
+			Name:      "genseed-rss",
+			Usage:     "Generate seed file from links in RSS1.0(XML)",
+			UsageText: "gokurou genseed-rss [URLs for RSS]",
+			Action:    genSeedRssCommand,
+		},
+		{
+			Name:      "genseed-wiki",
+			Usage:     "Generate seed file from externallinks.sql(Wikipedia dumps)",
+			UsageText: "gokurou genseed-wiki [command options]",
+			Flags: []cli.Flag{
+				cli.StringFlag{
+					Name:     "file,f",
+					Usage:    "path to `FILE` contains externallinks.sql of Wikipedia",
+					Required: true,
+				},
+			},
+			Action: genSeedWikiCommand,
+		},
+		{
 			Name:      "seeding",
 			Usage:     "Seeding initial URL",
 			UsageText: "gokurou seeding [command options]",
 			Flags: []cli.Flag{
 				cli.StringFlag{
-					Name:     "url,u",
-					Usage:    "seed `URL`",
-					Required: true,
+					Name:  "url,u",
+					Usage: "seed `URL`",
+				},
+				cli.StringFlag{
+					Name:  "file,f",
+					Usage: "specify `FILE` contains seed URLs",
 				},
 			},
 			Action: seedingCommand,
@@ -146,8 +178,157 @@ func seedingCommand(c *cli.Context) error {
 		return xerrors.Errorf("failed to load configuration: %v", err)
 	}
 
-	if err = gokurou.Seeding(conf, c.String("url")); err != nil {
-		return xerrors.Errorf("failed to seeding: %w", err)
+	seedURLs := make([]string, 0)
+
+	if len(c.String("url")) > 0 {
+		seedURLs = append(seedURLs, c.String("url"))
+	}
+
+	if len(c.String("file")) > 0 {
+		f, err := os.Open(c.String("file"))
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			seedURLs = append(seedURLs, scanner.Text())
+		}
+		if err := scanner.Err(); err != nil {
+			return xerrors.Errorf("failed to load seed file: %v", err)
+		}
+	}
+
+	if err := gokurou.Seeding(conf, seedURLs); err != nil {
+		return xerrors.Errorf("failed to seeding: %v", err)
+	}
+
+	return nil
+}
+
+func genSeedRssCommand(c *cli.Context) error {
+	conf, err := buildConfiguration(c.GlobalString("config"))
+	if err != nil {
+		return xerrors.Errorf("failed to load configuration: %v", err)
+	}
+
+	type result struct {
+		urls []string
+		err  error
+	}
+
+	ua := conf.MustOptionAsString("built_in.crawler.header_ua")
+	resultCh := make(chan *result)
+	client := &http.Client{
+		Transport: http.DefaultTransport,
+		Timeout:   10 * time.Second,
+	}
+	defer client.CloseIdleConnections()
+
+	getter := func(url string) *result {
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return &result{err: err}
+		}
+		req.Header.Set("User-Agent", ua)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return &result{err: err}
+		}
+
+		defer resp.Body.Close()
+
+		decoder := xml.NewDecoder(resp.Body)
+		waitLinkText := false
+		urls := make([]string, 0, 100)
+
+		for {
+			token, err := decoder.Token()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return &result{err: err}
+			}
+
+			switch t := token.(type) {
+			case xml.StartElement:
+				waitLinkText = t.Name.Local == "link"
+			case xml.CharData:
+				if waitLinkText {
+					waitLinkText = false
+					urls = append(urls, string(t))
+				}
+			}
+		}
+
+		return &result{urls: urls}
+	}
+
+	rssURLs := c.Args()
+	for _, url := range rssURLs {
+		go func() {
+			resultCh <- getter(url)
+		}()
+	}
+
+	var latestErr error
+	for i := 0; i < len(rssURLs); i++ {
+		received := <-resultCh
+		if received.err != nil {
+			latestErr = xerrors.Errorf("failed to get rss: %v", received.err)
+		} else {
+			for _, url := range received.urls {
+				fmt.Println(url)
+			}
+		}
+	}
+
+	return latestErr
+}
+
+// TODO: 各種バッファの値を調整できるようにする
+// TODO: 並列化
+func genSeedWikiCommand(c *cli.Context) error {
+	f, err := os.Open(c.String("file"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	bufSize := 2000000
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, bufSize), bufSize)
+
+	rand.Seed(time.Now().Unix())
+	log.SetOutput(ioutil.Discard)
+
+	for scanner.Scan() {
+		stmt, err := sqlparser.Parse(scanner.Text())
+		if err != nil {
+			continue
+		}
+
+		switch insert := stmt.(type) {
+		case *sqlparser.Insert:
+			values := insert.Rows.(sqlparser.Values)
+			choicedTuple := values[rand.Intn(len(values))]
+			url := string(choicedTuple[2].(*sqlparser.SQLVal).Val)
+
+			if strings.Contains(url, "wikimedia") ||
+				strings.Contains(url, ".pdf") ||
+				strings.HasPrefix(url, "//") {
+				continue
+			}
+			fmt.Println(url)
+
+		default:
+			continue
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return xerrors.Errorf("failed to parse file: %v", err)
 	}
 
 	return nil

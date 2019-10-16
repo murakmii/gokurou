@@ -230,9 +230,14 @@ func (f *redisPubSubURLFrontier) subscribeLoop(ctx context.Context, ch chan<- er
 	}()
 }
 
-func (f *redisPubSubURLFrontier) Seeding(url *www.SanitizedURL) error {
-	stream := f.streamName(uint16(f.computeDestinationGWN(url)))
-	if _, err := f.pub.Do("RPUSH", stream, url.String()); err != nil {
+func (f *redisPubSubURLFrontier) Seeding(url []string) error {
+	s, err := www.SanitizedURLFromString(url[0])
+	if err != nil {
+		return err
+	}
+
+	stream := f.streamName(uint16(f.computeDestinationGWN(s)))
+	if _, err := f.pub.Do("RPUSH", stream, s.String()); err != nil {
 		return err
 	}
 	return nil

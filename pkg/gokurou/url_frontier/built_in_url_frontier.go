@@ -116,16 +116,33 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}, nil
 }
 
-func (frontier *builtInURLFrontier) Seeding(url *www.SanitizedURL) error {
-	_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (1, ?)", url.String())
-	if err != nil {
-		return err
+func (frontier *builtInURLFrontier) Seeding(urls []string) error {
+	sanitizedURLs := make([]*www.SanitizedURL, 0, len(urls))
+	for _, url := range urls {
+		s, err := www.SanitizedURLFromString(url)
+		if err != nil {
+			continue
+		}
+		sanitizedURLs = append(sanitizedURLs, s)
+	}
+
+	from, _ := www.SanitizedURLFromString("http://localhost")
+	stubSpawned := &gokurou.SpawnedURL{
+		From:    from,
+		Spawned: sanitizedURLs,
+	}
+
+	for _, filtered := range frontier.filterURL(stubSpawned) {
+		_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (1, ?)", filtered.String())
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (frontier *builtInURLFrontier) Push(ctx context.Context, spawned *gokurou.SpawnedURL) error {
+func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.SpawnedURL) error {
 	filtered := frontier.filterURL(spawned)
 	for _, url := range filtered {
 		destGWN := frontier.computeDestinationGWN(url)
@@ -144,6 +161,7 @@ func (frontier *builtInURLFrontier) Push(ctx context.Context, spawned *gokurou.S
 			threshold = 50
 		}
 
+		// TODO: ここのinsertを1クエリにまとめる
 		if len(frontier.pushBuffer[destGWN]) >= threshold {
 			tabJoinedURL := strings.Join(frontier.pushBuffer[destGWN], "\t")
 			_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (?, ?)", destGWN, tabJoinedURL)

@@ -41,8 +41,8 @@ type SpawnedURL struct {
 type URLFrontier interface {
 	Finisher
 
-	// 初期URLの設定をサポートする
-	Seeding(url *www.SanitizedURL) error
+	// 初期URLの設定をサポートする TODO: 配列で受け取る方が便利
+	Seeding(url []string) error
 
 	// URLの集合に対してURLを追加する
 	Push(ctx context.Context, spawnedURL *SpawnedURL) error
@@ -97,12 +97,7 @@ type Crawler interface {
 }
 
 // 初期URLを設定する
-func Seeding(conf *Configuration, url string) error {
-	sanitized, err := www.SanitizedURLFromString(url)
-	if err != nil {
-		return xerrors.Errorf("failed to parse url: %w", err)
-	}
-
+func Seeding(conf *Configuration, urls []string) error {
 	ctx, err := contextGWN1(conf)
 	if err != nil {
 		return err
@@ -114,7 +109,7 @@ func Seeding(conf *Configuration, url string) error {
 		return err
 	}
 
-	if err = frontier.Seeding(sanitized); err != nil {
+	if err = frontier.Seeding(urls); err != nil {
 		return err
 	}
 

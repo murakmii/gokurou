@@ -10,6 +10,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.11.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.1
+	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	golang.org/x/net v0.0.0-20190827160401-ba9fcec4b297
 	golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
 )
