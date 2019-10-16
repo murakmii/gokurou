@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -136,8 +137,10 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	resp, err := crawler.request(ctx, url, pageRedirectPolicy)
 	gokurou.TracerFromContext(ctx).TraceCrawled(ctx, err)
 	defer func() {
-		if err != nil && !xerrors.Is(err, context.Canceled) {
-			logger.Warnf("failed to crawl: %v", err)
+		if err != nil {
+			if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+				logger.Warnf("failed to crawl: %v", err)
+			}
 		}
 	}()
 
@@ -202,8 +205,10 @@ func (crawler *builtInCrawler) Finish() error {
 func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) *robots.Txt {
 	resp, err := crawler.request(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
-		if err != nil && !xerrors.Is(err, context.Canceled) {
-			gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
+		if err != nil {
+			if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+				gokurou.LoggerFromContext(ctx).Warnf("failed to get robots.txt: %v", err)
+			}
 		}
 	}()
 
