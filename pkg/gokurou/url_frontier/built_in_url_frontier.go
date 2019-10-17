@@ -63,8 +63,9 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		}
 	}()
 
-	sharedDB.SetMaxOpenConns(1)
-	sharedDB.SetMaxIdleConns(1)
+	sharedDB.SetMaxOpenConns(2)
+	sharedDB.SetMaxIdleConns(2)
+	sharedDB.SetConnMaxLifetime(0)
 
 	localDBPathPtr := conf.OptionAsString(localDBPathConfKey)
 	var localDBPath string

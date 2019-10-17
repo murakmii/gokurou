@@ -107,17 +107,18 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 		secondaryUA: conf.MustOptionAsString(secondaryUAConfKey),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
-				MaxIdleConns:        1,
-				MaxIdleConnsPerHost: 1,
-				MaxConnsPerHost:     2,
-				DisableCompression:  false,
+				MaxIdleConns:          1,
+				MaxIdleConnsPerHost:   1,
+				MaxConnsPerHost:       2,
+				DisableCompression:    false,
+				ResponseHeaderTimeout: 3 * time.Second,
 
 				// ESTABLISHEDなsocketの数に如実に影響するので短めに設定する
 				// robots.txt取得後のページ取得まで生きていれば良い
 				IdleConnTimeout: 1 * time.Second,
 			},
 			CheckRedirect: nil,
-			Timeout:       10 * time.Second,
+			Timeout:       5 * time.Second,
 		},
 	}, nil
 }
@@ -128,7 +129,11 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		logger.Debug("finished")
 	}()
 
-	robotsTxt := crawler.getRobotsTxt(ctx, url)
+	robotsTxt, timedOut := crawler.getRobotsTxt(ctx, url)
+	if timedOut {
+		return nil // robots.txtがタイムアウトするならどうせページ取得もタイムアウトするので諦める
+	}
+
 	if robotsTxt != nil && !robotsTxt.Allows(url.Path()) {
 		logger.Debugf("crawling disallowed by robots.txt: %s", url)
 		return nil
@@ -202,7 +207,7 @@ func (crawler *builtInCrawler) Finish() error {
 
 // robots.txtを取得する
 // このメソッドはエラーを返さず、意図したrobots.txtが取得できないならデフォルトのそれを返す
-func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) *robots.Txt {
+func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) (*robots.Txt, bool) {
 	resp, err := crawler.request(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
 		if err != nil {
@@ -213,7 +218,9 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 	}()
 
 	if err != nil {
-		return nil
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, true
+		}
 	}
 
 	defer func() {
@@ -221,20 +228,20 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 	}()
 
 	if !resp.parsableText() {
-		return nil
+		return nil, false
 	}
 
 	reader, err := resp.bodyReader()
 	if err != nil {
-		return nil
+		return nil, false
 	}
 
 	txt, err := robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 
-	return txt
+	return txt, false
 }
 
 func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
