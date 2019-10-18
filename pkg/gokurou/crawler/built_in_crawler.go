@@ -112,6 +112,9 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 				MaxConnsPerHost:       2,
 				DisableCompression:    false,
 				ResponseHeaderTimeout: 3 * time.Second,
+				DialContext: (&net.Dialer{
+					Timeout: 2 * time.Second,
+				}).DialContext,
 
 				// ESTABLISHEDなsocketの数に如実に影響するので短めに設定する
 				// robots.txt取得後のページ取得まで生きていれば良い
@@ -220,6 +223,8 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 			return nil, true
+		} else {
+			return nil, false
 		}
 	}
 
