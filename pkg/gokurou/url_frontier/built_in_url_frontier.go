@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"golang.org/x/xerrors"
 
 	"github.com/murakmii/gokurou/pkg/gokurou"
@@ -37,6 +39,8 @@ type builtInURLFrontier struct {
 	localDB     *sql.DB
 	localDBPath string
 	popBuffer   []string
+
+	poppedHostCache *lru.Cache
 }
 
 func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
@@ -103,15 +107,19 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		}
 	}
 
+	// 実装読んだらsizeが負の場合だけエラーになるようだったので無視
+	poppedHostCache, _ := lru.New(100)
+
 	return &builtInURLFrontier{
-		sharedDB:     sharedDB,
-		totalWorkers: conf.TotalWorkers(),
-		tldFilter:    tldFilter,
-		pushBuffer:   make(map[uint][]string),
-		pushedCount:  make(map[uint]uint64),
-		localDB:      localDB,
-		localDBPath:  localDBPath,
-		popBuffer:    make([]string, 0),
+		sharedDB:        sharedDB,
+		totalWorkers:    conf.TotalWorkers(),
+		tldFilter:       tldFilter,
+		pushBuffer:      make(map[uint][]string),
+		pushedCount:     make(map[uint]uint64),
+		localDB:         localDB,
+		localDBPath:     localDBPath,
+		popBuffer:       make([]string, 0),
+		poppedHostCache: poppedHostCache,
 	}, nil
 }
 
@@ -202,15 +210,14 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 
 		frontier.popBuffer = frontier.popBuffer[1:]
 
-		var tmp sql.NullInt64
-		if err = frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", url.Host()).Scan(&tmp); err != nil {
-			if err != sql.ErrNoRows {
-				return nil, err
-			}
-		} else {
+		popped, err := frontier.isAlreadyPoppedHost(url.Host())
+		if err != nil {
+			return nil, err
+		} else if popped {
 			continue
 		}
 
+		frontier.poppedHostCache.Add(url.Host(), struct{}{})
 		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", url.Host()); err != nil {
 			return nil, err
 		}
@@ -252,6 +259,24 @@ func (frontier *builtInURLFrontier) Reset() error {
 	}
 
 	return nil
+}
+
+// あるホストについて既にPopしたかどうかを返す
+func (frontier *builtInURLFrontier) isAlreadyPoppedHost(host string) (bool, error) {
+	if frontier.poppedHostCache.Contains(host) {
+		return true, nil
+	}
+
+	var tmp sql.NullInt64
+	if err := frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", host).Scan(&tmp); err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		} else {
+			return true, err
+		}
+	} else {
+		return true, nil
+	}
 }
 
 // URLから、それを処理するべきworkerのGWNを求める

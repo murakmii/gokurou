@@ -113,7 +113,7 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 				DisableCompression:    false,
 				ResponseHeaderTimeout: 3 * time.Second,
 				DialContext: (&net.Dialer{
-					Timeout: 2 * time.Second,
+					Timeout: 3 * time.Second,
 				}).DialContext,
 
 				// ESTABLISHEDなsocketの数に如実に影響するので短めに設定する

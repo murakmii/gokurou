@@ -7,6 +7,7 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/google/uuid v1.1.1
+	github.com/hashicorp/golang-lru v0.5.3
 	github.com/mattn/go-sqlite3 v1.11.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/urfave/cli v1.22.1

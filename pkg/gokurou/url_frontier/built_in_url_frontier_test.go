@@ -263,3 +263,47 @@ func TestBuiltInURLFrontier_filterURL(t *testing.T) {
 		t.Errorf("filterURL() = %+v, want = [http://www.example.com/newhost http://www2.example.com/shorter]", got)
 	}
 }
+
+func TestBuiltInURLFrontier_isAlreadyPoppedHost(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(f *builtInURLFrontier)
+		in    string
+		want  bool
+	}{
+		{
+			name:  "Popしたことがないホストの場合",
+			setup: func(f *builtInURLFrontier) {},
+			in:    "example.com",
+			want:  false,
+		},
+		{
+			name: "Popしたことがあるホストの場合",
+			setup: func(f *builtInURLFrontier) {
+				if _, err := f.localDB.Exec("INSERT INTO crawled_hosts VALUES('example.com')"); err != nil {
+					panic(err)
+				}
+			},
+			in:   "example.com",
+			want: true,
+		},
+		{
+			name: "Popしたことをキャッシュしていた場合",
+			setup: func(f *builtInURLFrontier) {
+				f.poppedHostCache.Add("example.com", struct{}{})
+			},
+			in:   "example.com",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		f := buildURLFrontier(buildContext())
+		tt.setup(f)
+
+		got, _ := f.isAlreadyPoppedHost(tt.in)
+		if got != tt.want {
+			t.Errorf("isAlreadyPoppedHost() = %v, want = %v", got, tt.want)
+		}
+	}
+}
