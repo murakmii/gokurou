@@ -230,7 +230,7 @@ func (f *redisPubSubURLFrontier) subscribeLoop(ctx context.Context, ch chan<- er
 	}()
 }
 
-func (f *redisPubSubURLFrontier) Seeding(url []string) error {
+func (f *redisPubSubURLFrontier) Seeding(_ context.Context, url []string) error {
 	s, err := www.SanitizedURLFromString(url[0])
 	if err != nil {
 		return err

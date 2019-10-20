@@ -123,7 +123,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}, nil
 }
 
-func (frontier *builtInURLFrontier) Seeding(urls []string) error {
+func (frontier *builtInURLFrontier) Seeding(ctx context.Context, urls []string) error {
 	sanitizedURLs := make([]*www.SanitizedURL, 0, len(urls))
 	for _, url := range urls {
 		s, err := www.SanitizedURLFromString(url)
@@ -134,19 +134,10 @@ func (frontier *builtInURLFrontier) Seeding(urls []string) error {
 	}
 
 	from, _ := www.SanitizedURLFromString("http://localhost")
-	stubSpawned := &gokurou.SpawnedURL{
+	return frontier.Push(ctx, &gokurou.SpawnedURL{
 		From:    from,
 		Spawned: sanitizedURLs,
-	}
-
-	for _, filtered := range frontier.filterURL(stubSpawned) {
-		_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (1, ?)", filtered.String())
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	})
 }
 
 func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.SpawnedURL) error {

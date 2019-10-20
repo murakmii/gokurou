@@ -3,7 +3,6 @@ package crawler
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"io"
 	"net"
 	"net/http"
@@ -103,11 +102,6 @@ var (
 
 // Crawlerを生成して返す
 func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gokurou.Crawler, error) {
-	certs, err := x509.SystemCertPool()
-	if err != nil {
-		return nil, err
-	}
-
 	return &builtInCrawler{
 		headerUA:    conf.MustOptionAsString(headerUAConfKey),
 		primaryUA:   conf.MustOptionAsString(primaryUAConfKey),
@@ -123,7 +117,6 @@ func BuiltInCrawlerProvider(_ context.Context, conf *gokurou.Configuration) (gok
 					Timeout: 3 * time.Second,
 				}).DialContext,
 				TLSClientConfig: &tls.Config{
-					RootCAs:    certs,
 					MinVersion: tls.VersionSSL30, // SSL 3.0もサポートする
 					MaxVersion: tls.VersionTLS13,
 				},

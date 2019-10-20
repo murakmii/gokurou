@@ -42,7 +42,7 @@ type URLFrontier interface {
 	Finisher
 
 	// 初期URLの設定をサポートする TODO: 配列で受け取る方が便利
-	Seeding(url []string) error
+	Seeding(ctx context.Context, url []string) error
 
 	// URLの集合に対してURLを追加する
 	Push(ctx context.Context, spawnedURL *SpawnedURL) error
@@ -109,7 +109,7 @@ func Seeding(conf *Configuration, urls []string) error {
 		return err
 	}
 
-	if err = frontier.Seeding(urls); err != nil {
+	if err = frontier.Seeding(ctx, urls); err != nil {
 		return err
 	}
 
