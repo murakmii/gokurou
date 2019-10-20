@@ -47,7 +47,7 @@ func RootContext(conf *Configuration) (context.Context, error) {
 	// いくつかのシグナルを受信したらクロールを終了する
 	go func() {
 		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGKILL, syscall.SIGINT)
+		signal.Notify(sigCh, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
 
 		select {
 		case <-sigCh:
