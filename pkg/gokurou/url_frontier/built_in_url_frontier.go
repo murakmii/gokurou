@@ -108,7 +108,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 	}
 
 	// 実装読んだらsizeが負の場合だけエラーになるようだったので無視
-	poppedHostCache, _ := lru.New(100)
+	poppedHostCache, _ := lru.New(1000)
 
 	return &builtInURLFrontier{
 		sharedDB:        sharedDB,
@@ -151,6 +151,8 @@ func (frontier *builtInURLFrontier) Seeding(urls []string) error {
 
 func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.SpawnedURL) error {
 	filtered := frontier.filterURL(spawned)
+	insertValues := make([]interface{}, 0, len(filtered)*2)
+
 	for _, url := range filtered {
 		destGWN := frontier.computeDestinationGWN(url)
 
@@ -168,22 +170,29 @@ func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.Spa
 			threshold = 50
 		}
 
-		// TODO: ここのinsertを1クエリにまとめる
 		if len(frontier.pushBuffer[destGWN]) >= threshold {
 			tabJoinedURL := strings.Join(frontier.pushBuffer[destGWN], "\t")
-			_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES (?, ?)", destGWN, tabJoinedURL)
-			if err != nil {
-				return err
-			}
+			insertValues = append(insertValues, destGWN, tabJoinedURL)
 
 			frontier.pushBuffer[destGWN] = make([]string, 0, 51)
 		}
+	}
+
+	if len(insertValues) == 0 {
+		return nil
+	}
+
+	placeholders := strings.Repeat("(?, ?),", len(insertValues)/2-1) + "(?, ?)"
+	_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES "+placeholders, insertValues...)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
 func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
+	myGWN := uint(gokurou.GWNFromContext(ctx))
 	for {
 		if len(frontier.popBuffer) == 0 {
 			var id int64
@@ -209,6 +218,9 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 		}
 
 		frontier.popBuffer = frontier.popBuffer[1:]
+		if frontier.computeDestinationGWN(url) != myGWN {
+			return nil, xerrors.Errorf("received invalid URL(GWN is invalid): %s", url) // おかしなPushはフェイルファスト
+		}
 
 		popped, err := frontier.isAlreadyPoppedHost(url.Host())
 		if err != nil {
@@ -217,7 +229,6 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 			continue
 		}
 
-		frontier.poppedHostCache.Add(url.Host(), struct{}{})
 		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", url.Host()); err != nil {
 			return nil, err
 		}
@@ -275,6 +286,7 @@ func (frontier *builtInURLFrontier) isAlreadyPoppedHost(host string) (bool, erro
 			return true, err
 		}
 	} else {
+		frontier.poppedHostCache.Add(host, struct{}{})
 		return true, nil
 	}
 }

@@ -72,24 +72,30 @@ func TestBuiltInURLFrontier_Push(t *testing.T) {
 	defer frontier.Finish()
 
 	t.Run("十分にPushしたことがない場合、即座にPushする", func(t *testing.T) {
-		url := buildRandomHostURL()
+		urls := []*www.SanitizedURL{
+			buildRandomHostURL(),
+			buildRandomHostURL(),
+			buildRandomHostURL(),
+		}
 		spawned := &gokurou.SpawnedURL{
 			From:    buildRandomHostURL(),
-			Spawned: []*www.SanitizedURL{url},
+			Spawned: urls,
 		}
 
 		if err := frontier.Push(ctx, spawned); err != nil {
-			t.Errorf("Push(%s) = %v", url, err)
+			t.Errorf("Push() = %v", err)
 		}
 
-		var pushed string
-		err := frontier.sharedDB.QueryRow("SELECT tab_joined_url FROM urls WHERE id = (SELECT MAX(id) FROM urls)").Scan(&pushed)
-		if err != nil {
-			panic(err)
-		}
+		for i := 1; i <= 3; i++ {
+			var pushed string
+			err := frontier.sharedDB.QueryRow("SELECT tab_joined_url FROM urls WHERE id = ?", i).Scan(&pushed)
+			if err != nil {
+				panic(err)
+			}
 
-		if pushed != url.String() {
-			t.Errorf("Push(%s) does NOT push valid url(%s)", url, pushed)
+			if pushed != urls[i-1].String() {
+				t.Errorf("Push() does NOT push valid url(%s)", urls[i-1].String())
+			}
 		}
 	})
 
