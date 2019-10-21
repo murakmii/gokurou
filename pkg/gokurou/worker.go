@@ -116,7 +116,6 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 	// URLFrontierのPopを回し続けるgoroutineを立ち上げる
 	go func() {
-		popStarted := time.Now()
 		for {
 			url, err := urlFrontier.Pop(ctx)
 			if err != nil {
@@ -140,10 +139,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 					return
 				}
 
-				TracerFromContext(ctx).TracePop(ctx, time.Since(popStarted).Seconds())
-
 				if !locked {
-					popStarted = time.Now()
 					continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
 				}
 
@@ -153,8 +149,6 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 					w.resultCh <- nil
 					return
 				}
-
-				popStarted = time.Now()
 			}
 		}
 	}()
@@ -190,8 +184,10 @@ func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-
 	// URLFrontierがPopしたURLをCrawlし続ける
 	go func() {
 		for {
+			started := time.Now()
 			select {
 			case url := <-popCh:
+				TracerFromContext(ctx).TracePop(ctx, time.Since(started).Seconds())
 				// loggerにUUIDを付ける
 				id, _ := uuid.NewRandom()
 				logger := LoggerFromContext(ctx)
