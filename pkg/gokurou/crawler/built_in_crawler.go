@@ -278,10 +278,8 @@ func (rw *responseWrapper) bodyReader() (io.Reader, error) {
 func (rw *responseWrapper) parsableText() bool {
 	ct := rw.resp.Header.Get("Content-Type")
 
-	return rw.resp.StatusCode >= 200 &&
-		rw.resp.StatusCode < 300 &&
-		(len(ct) == 0 ||
-			strings.Contains(ct, "text") ||
-			strings.Contains(ct, "html") ||
-			strings.Contains(ct, "xml"))
+	return len(ct) == 0 ||
+		strings.Contains(ct, "text") ||
+		strings.Contains(ct, "html") ||
+		strings.Contains(ct, "xml")
 }
