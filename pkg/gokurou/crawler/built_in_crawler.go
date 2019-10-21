@@ -137,9 +137,13 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		logger.Debug("finished")
 	}()
 
-	robotsTxt, timedOut := crawler.getRobotsTxt(ctx, url)
-	if timedOut {
-		return nil // robots.txtがタイムアウトするならどうせページ取得もタイムアウトするので諦める
+	robotsTxt, err := crawler.getRobotsTxt(ctx, url)
+	if err != nil {
+		if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
+			logger.Warnf("failed to crawl: %v", err)
+		}
+
+		return nil // robots.txtがエラーになるならどうせページ取得もエラーになるので中断する
 	}
 
 	if robotsTxt != nil && !robotsTxt.Allows(url.Path()) {
@@ -215,7 +219,7 @@ func (crawler *builtInCrawler) Finish() error {
 
 // robots.txtを取得する
 // このメソッドはエラーを返さず、意図したrobots.txtが取得できないならデフォルトのそれを返す
-func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) (*robots.Txt, bool) {
+func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.SanitizedURL) (*robots.Txt, error) {
 	resp, err := crawler.request(ctx, url.RobotsTxtURL(), robotsTxtRedirectPolicy)
 	defer func() {
 		if err != nil {
@@ -226,32 +230,21 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 	}()
 
 	if err != nil {
-		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return nil, true
-		} else {
-			return nil, false
-		}
+		return nil, err
 	}
 
-	defer func() {
-		err = resp.resp.Body.Close()
-	}()
+	defer resp.resp.Body.Close()
 
 	if !resp.parsableText() {
-		return nil, false
+		return nil, nil
 	}
 
 	reader, err := resp.bodyReader()
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 
-	txt, err := robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
-	if err != nil {
-		return nil, false
-	}
-
-	return txt, false
+	return robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
 }
 
 func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
