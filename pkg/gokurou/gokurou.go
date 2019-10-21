@@ -67,8 +67,11 @@ type ArtifactGatherer interface {
 type Tracer interface {
 	Finisher
 
-	// 1クロール完了するごとに呼び出される
-	TraceCrawled(ctx context.Context, err error)
+	// クロールが開始される度に呼び出される
+	TraceStartedCrawl(ctx context.Context)
+
+	// 成果物を1つ収集する度に呼び出される
+	TraceGathered(ctx context.Context)
 
 	// 1 HTTP GET完了するごとに呼び出される
 	TraceGetRequest(ctx context.Context, elaspsed float64)
@@ -81,7 +84,8 @@ type Tracer interface {
 type NullTracer struct{}
 
 func NewNullTracer() Tracer                                       { return NullTracer{} }
-func (t NullTracer) TraceCrawled(_ context.Context, _ error)      {}
+func (t NullTracer) TraceStartedCrawl(_ context.Context)          {}
+func (t NullTracer) TraceGathered(_ context.Context)              {}
 func (t NullTracer) TraceGetRequest(_ context.Context, _ float64) {}
 func (t NullTracer) TracePop(_ context.Context, _ float64)        {}
 func (t NullTracer) Finish() error                                { return nil }

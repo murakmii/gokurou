@@ -41,12 +41,13 @@ func buildMetricsTracer(client metricsClient, timeProvider func() time.Time) *me
 		dimName:  "Environment",
 		dimValue: "Test",
 
-		crawled:      newSumInMinuetMetrics(timeProvider, "CPM", "Count"),
-		crawlLatency: newAvgInMinuetMetrics(timeProvider, "Crawl Latency", "Seconds"),
+		startedCrawl: newSumInMinuetMetrics(timeProvider, "", ""),
+		gathered:     newSumInMinuetMetrics(timeProvider, "", ""),
+		crawlLatency: newAvgInMinuetMetrics(timeProvider, "", ""),
 	}
 }
 
-func TestMetricsTracer_TraceCrawled(t *testing.T) {
+func TestMetricsTracer_TraceStartedCrawl(t *testing.T) {
 	type want struct {
 		values []float64
 		times  []int64
@@ -96,14 +97,78 @@ func TestMetricsTracer_TraceCrawled(t *testing.T) {
 			tracer := buildMetricsTracer(client, buildTimeProvider(tt.in...))
 
 			for i := 0; i < len(tt.in); i++ {
-				tracer.TraceCrawled(context.Background(), nil)
+				tracer.TraceStartedCrawl(context.Background())
 			}
 			_ = tracer.Finish()
 
 			gotValues := client.puttedValues
 			gotTimes := client.puttedTimes
 			if !reflect.DeepEqual(gotValues, tt.want.values) || !reflect.DeepEqual(gotTimes, tt.want.times) {
-				t.Errorf("TraceCrawled() = {%+v,%+v}, want = {%+v,%+v}", gotValues, gotTimes, tt.want.values, tt.want.times)
+				t.Errorf("TraceStartedCrawl() = {%+v,%+v}, want = {%+v,%+v}", gotValues, gotTimes, tt.want.values, tt.want.times)
+			}
+		})
+
+	}
+}
+
+func TestMetricsTracer_TraceGathered(t *testing.T) {
+	type want struct {
+		values []float64
+		times  []int64
+	}
+
+	tests := []struct {
+		name string
+		in   []time.Time
+		want want
+	}{
+		{
+			name: "1分毎に記録された場合、それぞれをメトリクスとして送信する",
+			in: []time.Time{
+				time.Unix(59, 0),
+				time.Unix(61, 0),
+				time.Unix(130, 0),
+				time.Unix(200, 0),
+			},
+			want: want{
+				values: []float64{1.0, 1.0, 1.0},
+				times:  []int64{0, 60, 120},
+			},
+		},
+		{
+			name: "1分間に複数回記録された場合、それぞれをバッファしてからメトリクスとして送信する",
+			in: []time.Time{
+				time.Unix(1, 0),
+				time.Unix(2, 0),
+				time.Unix(3, 0),
+				time.Unix(60, 0),
+				time.Unix(61, 0),
+				time.Unix(62, 0),
+				time.Unix(120, 0),
+				time.Unix(130, 0),
+				time.Unix(180, 0),
+			},
+			want: want{
+				values: []float64{3.0, 3.0, 2.0},
+				times:  []int64{0, 60, 120},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := buildMockMetricsClient()
+			tracer := buildMetricsTracer(client, buildTimeProvider(tt.in...))
+
+			for i := 0; i < len(tt.in); i++ {
+				tracer.TraceGathered(context.Background())
+			}
+			_ = tracer.Finish()
+
+			gotValues := client.puttedValues
+			gotTimes := client.puttedTimes
+			if !reflect.DeepEqual(gotValues, tt.want.values) || !reflect.DeepEqual(gotTimes, tt.want.times) {
+				t.Errorf("TraceGathered() = {%+v,%+v}, want = {%+v,%+v}", gotValues, gotTimes, tt.want.values, tt.want.times)
 			}
 		})
 
@@ -189,7 +254,7 @@ func TestMetricsTracer_TraceGetRequest(t *testing.T) {
 			gotValues := client.puttedValues
 			gotTimes := client.puttedTimes
 			if !reflect.DeepEqual(gotValues, tt.want.values) || !reflect.DeepEqual(gotTimes, tt.want.times) {
-				t.Errorf("TraceCrawled() = {%+v,%+v}, want = {%+v,%+v}", gotValues, gotTimes, tt.want.values, tt.want.times)
+				t.Errorf("TraceStartedCrawl() = {%+v,%+v}, want = {%+v,%+v}", gotValues, gotTimes, tt.want.values, tt.want.times)
 			}
 		})
 

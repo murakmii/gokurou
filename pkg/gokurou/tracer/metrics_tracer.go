@@ -29,7 +29,8 @@ type metricsTracer struct {
 	dimName  string
 	dimValue string
 
-	crawled      metrics
+	startedCrawl metrics
+	gathered     metrics
 	crawlLatency metrics
 	popLatency   metrics
 }
@@ -168,15 +169,23 @@ func NewMetricsTracer(conf *gokurou.Configuration) (gokurou.Tracer, error) {
 		dimName:  conf.MustOptionAsString(dimNameConfKey),
 		dimValue: conf.MustOptionAsString(dimValueConfKey),
 
-		crawled:      newSumInMinuetMetrics(time.Now, "Crawl count", "Count"),
+		startedCrawl: newSumInMinuetMetrics(time.Now, "Started crawl", "Count"),
+		gathered:     newSumInMinuetMetrics(time.Now, "Gathered", "Count"),
 		crawlLatency: newAvgInMinuetMetrics(time.Now, "Request latency", "Seconds"),
 		popLatency:   newAvgInMinuetMetrics(time.Now, "Pop latency", "Seconds"),
 	}, nil
 }
 
 // クロールをトレースして1分間の間に発生したクロール回数をCloudWatchに送信する
-func (tracer *metricsTracer) TraceCrawled(ctx context.Context, _ error) {
-	if e := tracer.crawled.add(1); e != nil {
+func (tracer *metricsTracer) TraceStartedCrawl(ctx context.Context) {
+	if e := tracer.startedCrawl.add(1); e != nil {
+		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
+	}
+}
+
+// 成果物収集をトレースして1分間の間に発生したクロール回数をCloudWatchに送信する
+func (tracer *metricsTracer) TraceGathered(ctx context.Context) {
+	if e := tracer.gathered.add(1); e != nil {
 		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
 	}
 }

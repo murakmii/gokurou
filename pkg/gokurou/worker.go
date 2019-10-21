@@ -158,6 +158,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 		for {
 			select {
 			case spawned := <-pushCh:
+				TracerFromContext(ctx).TraceGathered(ctx)
 				if err := urlFrontier.Push(ctx, spawned); err != nil {
 					w.resultCh <- err
 					return
@@ -188,6 +189,8 @@ func (w *Worker) startCrawler(ctx context.Context, conf *Configuration, popCh <-
 			select {
 			case url := <-popCh:
 				TracerFromContext(ctx).TracePop(ctx, time.Since(started).Seconds())
+				TracerFromContext(ctx).TraceStartedCrawl(ctx)
+
 				// loggerにUUIDを付ける
 				id, _ := uuid.NewRandom()
 				logger := LoggerFromContext(ctx)

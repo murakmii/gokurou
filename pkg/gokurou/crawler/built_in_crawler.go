@@ -148,7 +148,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 	}
 
 	resp, err := crawler.request(ctx, url, pageRedirectPolicy)
-	gokurou.TracerFromContext(ctx).TraceCrawled(ctx, err)
+
 	defer func() {
 		if err != nil {
 			if netErr, ok := err.(net.Error); !ok || !netErr.Timeout() {
