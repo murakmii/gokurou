@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/transform"
+
 	"github.com/murakmii/gokurou/pkg/gokurou"
 
 	"github.com/murakmii/gokurou/pkg/gokurou/www"
@@ -187,12 +189,7 @@ func (crawler *builtInCrawler) Crawl(ctx context.Context, url *www.SanitizedURL,
 		return nil
 	}
 
-	reader, err := resp.bodyReader()
-	if err != nil {
-		return nil
-	}
-
-	page, err := www.ParseHTML(reader, url)
+	page, err := www.ParseHTML(resp.bodyReader(), url)
 	if err != nil {
 		return nil
 	}
@@ -239,12 +236,7 @@ func (crawler *builtInCrawler) getRobotsTxt(ctx context.Context, url *www.Saniti
 		return nil, nil
 	}
 
-	reader, err := resp.bodyReader()
-	if err != nil {
-		return nil, err
-	}
-
-	return robots.ParserRobotsTxt(reader, crawler.primaryUA, crawler.secondaryUA)
+	return robots.ParserRobotsTxt(resp.bodyReader(), crawler.primaryUA, crawler.secondaryUA)
 }
 
 func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedURL, redirectPolicy func(req *http.Request, via []*http.Request) error) (*responseWrapper, error) {
@@ -271,8 +263,14 @@ func (crawler *builtInCrawler) request(ctx context.Context, url *www.SanitizedUR
 	return &responseWrapper{resp: resp, elapsed: elapsed}, nil
 }
 
-func (rw *responseWrapper) bodyReader() (io.Reader, error) {
-	return charset.NewReader(rw.resp.Body, rw.resp.Header.Get("Content-Type"))
+func (rw *responseWrapper) bodyReader() io.Reader {
+	// Content-Typeのみでエンコーディングを推測し、無理ならそのままにする
+	src := rw.resp.Body
+	enc, _, certain := charset.DetermineEncoding(make([]byte, 0), rw.resp.Header.Get("Content-Type"))
+	if !certain {
+		return src
+	}
+	return transform.NewReader(src, enc.NewDecoder())
 }
 
 func (rw *responseWrapper) parsableText() bool {

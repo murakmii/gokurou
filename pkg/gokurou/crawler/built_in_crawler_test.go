@@ -199,10 +199,6 @@ func TestDefaultCrawler_Crawl(t *testing.T) {
 		if art.URL != url.String() || art.StatusCode != 301 || art.Server != "test-server" {
 			t.Errorf("Crawl() collected invalid artifact")
 		}
-
-		if len(out.pushed) != 0 {
-			t.Errorf("Crawl() collected invalid urls")
-		}
 	})
 
 	t.Run("リダイレクト込みで時間を浪費するようなフローを辿った場合、途中で諦める", func(t *testing.T) {
