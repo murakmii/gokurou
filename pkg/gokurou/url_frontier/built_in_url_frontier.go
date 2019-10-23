@@ -184,6 +184,7 @@ func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.Spa
 
 func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL, error) {
 	myGWN := uint(gokurou.GWNFromContext(ctx))
+	skipped := 0
 	for {
 		if len(frontier.popBuffer) == 0 {
 			var id int64
@@ -217,6 +218,7 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 		if err != nil {
 			return nil, err
 		} else if popped {
+			skipped++
 			continue
 		}
 
@@ -224,6 +226,7 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 			return nil, err
 		}
 
+		gokurou.TracerFromContext(ctx).TracePopSkipped(ctx, skipped)
 		return url, nil
 	}
 }

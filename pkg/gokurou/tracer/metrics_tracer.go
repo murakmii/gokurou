@@ -33,6 +33,7 @@ type metricsTracer struct {
 	gathered     metrics
 	crawlLatency metrics
 	popLatency   metrics
+	popSkipped   metrics
 }
 
 // 外部(CloudWatch)送信するためのClient
@@ -173,6 +174,7 @@ func NewMetricsTracer(conf *gokurou.Configuration) (gokurou.Tracer, error) {
 		gathered:     newSumInMinuetMetrics(time.Now, "Gathered", "Count"),
 		crawlLatency: newAvgInMinuetMetrics(time.Now, "Request latency", "Seconds"),
 		popLatency:   newAvgInMinuetMetrics(time.Now, "Pop latency", "Seconds"),
+		popSkipped:   newAvgInMinuetMetrics(time.Now, "Pop skipped", "Count"),
 	}, nil
 }
 
@@ -200,6 +202,13 @@ func (tracer *metricsTracer) TraceGetRequest(ctx context.Context, elapsed float6
 // 1 Popをトレースして1分間の間に発生したPopのレイテンシの平均をCloudWatchに送信する
 func (tracer *metricsTracer) TracePop(ctx context.Context, elapsed float64) {
 	if e := tracer.popLatency.add(elapsed); e != nil {
+		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
+	}
+}
+
+// 1分間の間に発生したPopの連続スキップ回数をCloudWatchに送信する
+func (tracer *metricsTracer) TracePopSkipped(ctx context.Context, count int) {
+	if e := tracer.popSkipped.add(float64(count)); e != nil {
 		tracer.client.put(ctx, tracer.ns, e, tracer.dimName, tracer.dimValue)
 	}
 }

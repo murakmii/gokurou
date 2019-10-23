@@ -22,6 +22,7 @@ func buildContext() context.Context {
 	logger.SetOutput(ioutil.Discard)
 
 	ctx := gokurou.ContextWithLogger(context.Background(), logrus.NewEntry(logger))
+	ctx = gokurou.ContextWithTracer(ctx, gokurou.NewNullTracer())
 	return gokurou.ContextWithGWN(ctx, uint16(1))
 }
 
