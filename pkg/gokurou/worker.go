@@ -116,6 +116,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 	// URLFrontierのPopを回し続けるgoroutineを立ち上げる
 	go func() {
+		idle := 0
 		for {
 			url, err := urlFrontier.Pop(ctx)
 			if err != nil {
@@ -125,6 +126,7 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 
 			if url == nil {
 				// Pop出来ないならしばらく待つ
+				idle++
 				select {
 				case <-time.After(100 * time.Millisecond):
 				case <-ctx.Done():
@@ -140,11 +142,14 @@ func (w *Worker) startURLFrontier(ctx context.Context, conf *Configuration, coor
 				}
 
 				if !locked {
+					idle++
 					continue // TODO: IPアドレスでロックできなかったURLはとりあえず捨てている
 				}
 
 				select {
 				case popCh <- url:
+					TracerFromContext(ctx).TracePopIdle(ctx, idle)
+					idle = 0
 				case <-ctx.Done():
 					w.resultCh <- nil
 					return

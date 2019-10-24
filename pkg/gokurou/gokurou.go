@@ -81,6 +81,9 @@ type Tracer interface {
 
 	// Popの連続スキップ回数が確定する度に呼び出される
 	TracePopSkipped(ctx context.Context, count int)
+
+	// Popの連続待機回数が確定する度に呼び出される
+	TracePopIdle(ctx context.Context, count int)
 }
 
 // 何もしないデフォルトのトレーサーを実装しておく
@@ -92,6 +95,7 @@ func (t NullTracer) TraceGathered(_ context.Context)              {}
 func (t NullTracer) TraceGetRequest(_ context.Context, _ float64) {}
 func (t NullTracer) TracePop(_ context.Context, _ float64)        {}
 func (t NullTracer) TracePopSkipped(_ context.Context, _ int)     {}
+func (t NullTracer) TracePopIdle(_ context.Context, _ int)        {}
 func (t NullTracer) Finish() error                                { return nil }
 
 // クロールの実装を要求するinterface
