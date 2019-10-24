@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"hash/fnv"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 
@@ -36,9 +38,10 @@ type builtInURLFrontier struct {
 	pushBuffer   map[uint][]string
 	pushedCount  map[uint]uint64
 
-	localDB     *sql.DB
-	localDBPath string
-	popBuffer   []string
+	localDB         *sql.DB
+	localDBPath     string
+	popBuffer       []string
+	randomizedOrder func() int64
 
 	poppedHostCache *lru.Cache
 }
@@ -107,6 +110,9 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		}
 	}
 
+	rnd := rand.New(rand.NewSource(time.Now().Unix()))
+	randomizedOrder := func() int64 { return rnd.Int63() }
+
 	// 実装読んだらsizeが負の場合だけエラーになるようだったので無視
 	poppedHostCache, _ := lru.New(1000)
 
@@ -119,6 +125,7 @@ func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration
 		localDB:         localDB,
 		localDBPath:     localDBPath,
 		popBuffer:       make([]string, 0),
+		randomizedOrder: randomizedOrder,
 		poppedHostCache: poppedHostCache,
 	}, nil
 }
@@ -158,12 +165,12 @@ func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.Spa
 		if frontier.pushedCount[destGWN] < noBufferThreshold {
 			threshold = 1
 		} else {
-			threshold = 50
+			threshold = 1 // TODO: 調整
 		}
 
 		if len(frontier.pushBuffer[destGWN]) >= threshold {
 			tabJoinedURL := strings.Join(frontier.pushBuffer[destGWN], "\t")
-			insertValues = append(insertValues, destGWN, tabJoinedURL)
+			insertValues = append(insertValues, destGWN, tabJoinedURL, frontier.randomizedOrder())
 
 			frontier.pushBuffer[destGWN] = make([]string, 0, 51)
 		}
@@ -173,8 +180,8 @@ func (frontier *builtInURLFrontier) Push(_ context.Context, spawned *gokurou.Spa
 		return nil
 	}
 
-	placeholders := strings.Repeat("(?, ?),", len(insertValues)/2-1) + "(?, ?)"
-	_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url) VALUES "+placeholders, insertValues...)
+	placeholders := strings.Repeat("(?, ?, ?),", len(insertValues)/3-1) + "(?, ?, ?)"
+	_, err := frontier.sharedDB.Exec("INSERT INTO urls(gwn, tab_joined_url, randomized_order) VALUES "+placeholders, insertValues...)
 	if err != nil {
 		return err
 	}
@@ -189,7 +196,7 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 		if len(frontier.popBuffer) == 0 {
 			var id int64
 			var tabJoinedURL string
-			query := "SELECT id, tab_joined_url FROM urls WHERE gwn = ? ORDER BY id LIMIT 1"
+			query := "SELECT id, tab_joined_url FROM urls WHERE gwn = ? ORDER BY randomized_order LIMIT 1"
 			err := frontier.sharedDB.QueryRow(query, gokurou.GWNFromContext(ctx)).Scan(&id, &tabJoinedURL)
 
 			if err == sql.ErrNoRows {
