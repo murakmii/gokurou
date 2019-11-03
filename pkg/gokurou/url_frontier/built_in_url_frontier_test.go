@@ -73,6 +73,33 @@ func buildRandomHostURL() *www.SanitizedURL {
 	return url
 }
 
+func TestHost_Normalize(t *testing.T) {
+	tests := []struct {
+		in   Host
+		want string
+	}{
+		{
+			in:   Host("example.com"),
+			want: "example.com",
+		},
+		{
+			in:   Host("foo.example.com"),
+			want: "*.example.com",
+		},
+		{
+			in:   Host("foo.bar.example.com"),
+			want: "*.*.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		got := tt.in.Normalize()
+		if got != tt.want {
+			t.Errorf("Normalize() = %s, want = %s", got, tt.want)
+		}
+	}
+}
+
 func TestBuiltInURLFrontier_Push(t *testing.T) {
 	ctx := buildContext()
 	frontier := buildURLFrontier(ctx)
@@ -302,6 +329,16 @@ func TestBuiltInURLFrontier_isAlreadyPoppedHost(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "Popしたことがあるホストの場合(2)",
+			setup: func(f *builtInURLFrontier) {
+				if _, err := f.localDB.Exec("INSERT INTO crawled_hosts VALUES('*.example.com')"); err != nil {
+					panic(err)
+				}
+			},
+			in:   "foo.example.com",
+			want: true,
+		},
+		{
 			name: "Popしたことをキャッシュしていた場合",
 			setup: func(f *builtInURLFrontier) {
 				f.poppedHostCache.Add("example.com", struct{}{})
@@ -312,12 +349,14 @@ func TestBuiltInURLFrontier_isAlreadyPoppedHost(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		f := buildURLFrontier(buildContext())
-		tt.setup(f)
+		t.Run(tt.name, func(t *testing.T) {
+			f := buildURLFrontier(buildContext())
+			tt.setup(f)
 
-		got, _ := f.isAlreadyPoppedHost(tt.in)
-		if got != tt.want {
-			t.Errorf("isAlreadyPoppedHost() = %v, want = %v", got, tt.want)
-		}
+			got, _ := f.isAlreadyPoppedHost(Host(tt.in))
+			if got != tt.want {
+				t.Errorf("isAlreadyPoppedHost() = %v, want = %v", got, tt.want)
+			}
+		})
 	}
 }

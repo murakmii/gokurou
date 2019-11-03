@@ -46,6 +46,20 @@ type builtInURLFrontier struct {
 	poppedHostCache *lru.Cache
 }
 
+type Host string
+
+func (host Host) Normalize() string {
+	labels := strings.Split(host.String(), ".")
+	for i := len(labels) - 3; i >= 0; i-- {
+		labels[i] = "*"
+	}
+	return strings.Join(labels, ".")
+}
+
+func (host Host) String() string {
+	return string(host)
+}
+
 func BuiltInURLFrontierProvider(ctx context.Context, conf *gokurou.Configuration) (gokurou.URLFrontier, error) {
 	var tldFilter []string
 	tldFilterValue, exists := conf.Options[tldFilterConfKey]
@@ -221,7 +235,8 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 			return nil, xerrors.Errorf("received invalid URL(GWN is invalid): %s", url) // おかしなPushはフェイルファスト
 		}
 
-		popped, err := frontier.isAlreadyPoppedHost(url.Host())
+		host := Host(url.Host())
+		popped, err := frontier.isAlreadyPoppedHost(host)
 		if err != nil {
 			return nil, err
 		} else if popped {
@@ -229,7 +244,7 @@ func (frontier *builtInURLFrontier) Pop(ctx context.Context) (*www.SanitizedURL,
 			continue
 		}
 
-		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", url.Host()); err != nil {
+		if _, err := frontier.localDB.Exec("INSERT INTO crawled_hosts VALUES(?)", host.Normalize()); err != nil {
 			return nil, err
 		}
 
@@ -274,20 +289,21 @@ func (frontier *builtInURLFrontier) Reset() error {
 }
 
 // あるホストについて既にPopしたかどうかを返す
-func (frontier *builtInURLFrontier) isAlreadyPoppedHost(host string) (bool, error) {
-	if frontier.poppedHostCache.Contains(host) {
+func (frontier *builtInURLFrontier) isAlreadyPoppedHost(host Host) (bool, error) {
+	n := host.Normalize()
+	if frontier.poppedHostCache.Contains(n) {
 		return true, nil
 	}
 
 	var tmp sql.NullInt64
-	if err := frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", host).Scan(&tmp); err != nil {
+	if err := frontier.localDB.QueryRow("SELECT 1 FROM crawled_hosts WHERE host = ?", n).Scan(&tmp); err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		} else {
 			return true, err
 		}
 	} else {
-		frontier.poppedHostCache.Add(host, struct{}{})
+		frontier.poppedHostCache.Add(n, struct{}{})
 		return true, nil
 	}
 }
